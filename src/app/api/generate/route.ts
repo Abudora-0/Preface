@@ -15,7 +15,17 @@ import {
 } from "@/lib/ai";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+
+/*
+ * Read by the deployment platform, ignored when self-hosted with `next start`.
+ * Hosted deployments set PREFACE_DISABLE_AI, so this route answers 404 without
+ * doing any work and never approaches the limit. Kept at the common platform
+ * ceiling rather than higher, since declaring more than a plan allows is
+ * rejected at deploy time. A generation against a reachable model takes 70 to
+ * 110 seconds, so anyone hosting this with generation switched on needs to
+ * raise it to match their plan.
+ */
+export const maxDuration = 60;
 
 const ANTHROPIC_MODEL = "claude-opus-5";
 
