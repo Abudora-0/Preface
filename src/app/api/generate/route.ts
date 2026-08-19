@@ -1,6 +1,7 @@
 import { analyzeDump } from "@/lib/analyze";
 import {
   AiError,
+  aiOffered,
   OLLAMA_MODEL,
   progressFromPartial,
   SPEC_SCHEMA,
@@ -86,6 +87,11 @@ export async function POST(req: Request) {
     body = await req.json();
   } catch {
     return bad("Request body must be JSON.");
+  }
+
+  // The UI hides generation on such a deployment, so this is defence in depth.
+  if (!aiOffered()) {
+    return bad("Generation is not available on this deployment.", 404);
   }
 
   const dump = (body.dump ?? "").trim();

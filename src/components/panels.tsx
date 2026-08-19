@@ -176,6 +176,7 @@ export function DumpPanel({
   onDumpChange,
   onAnalyze,
   onGenerate,
+  aiOffered,
   aiAvailable,
   aiLabel,
   aiHint,
@@ -188,6 +189,8 @@ export function DumpPanel({
   onDumpChange: (v: string) => void;
   onAnalyze: () => void;
   onGenerate: () => void;
+  /** False on a deployment with no reachable model: the feature is hidden. */
+  aiOffered: boolean;
   aiAvailable: boolean | null;
   aiLabel: string;
   aiHint: string | null;
@@ -270,21 +273,27 @@ src/
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={onAnalyze} disabled={busy || chars < 20}>
-          Analyze locally
-        </Button>
         <Button
-          variant="primary"
-          onClick={onGenerate}
-          disabled={busy || chars < 20 || aiAvailable === false}
-          title={
-            aiAvailable === false
-              ? (aiHint ?? "AI generation is unavailable")
-              : undefined
-          }
+          variant={aiOffered ? "default" : "primary"}
+          onClick={onAnalyze}
+          disabled={busy || chars < 20}
         >
-          {busy ? "Generating…" : `Generate with ${aiLabel}`}
+          {aiOffered ? "Analyze locally" : "Build the README"}
         </Button>
+        {aiOffered ? (
+          <Button
+            variant="primary"
+            onClick={onGenerate}
+            disabled={busy || chars < 20 || aiAvailable === false}
+            title={
+              aiAvailable === false
+                ? (aiHint ?? "AI generation is unavailable")
+                : undefined
+            }
+          >
+            {busy ? "Generating…" : `Generate with ${aiLabel}`}
+          </Button>
+        ) : null}
       </div>
 
       {progress ? <GenerationProgress progress={progress} /> : null}
@@ -300,7 +309,12 @@ src/
         </Callout>
       ) : null}
 
-      {aiAvailable === false ? (
+      {!aiOffered ? (
+        <Callout>
+          Preface parses your manifests, detects the stack, and fills the form
+          in the browser. Every field stays editable afterwards.
+        </Callout>
+      ) : aiAvailable === false ? (
         <Callout tone="warn">
           {aiHint}
           <br />

@@ -52,15 +52,15 @@ const FEATURES = [
   },
   {
     icon: LayoutTemplate,
-    title: "Five distinct styles",
-    body: "The same content rendered as a minimal library README, a conventional OSS layout, a loud showcase page, a dense reference doc, or a profile README.",
+    title: "Eight distinct styles",
+    body: "The same content rendered as a minimal library README, a conventional OSS layout, a loud showcase page, a dense reference doc, a CLI page, an Action, a monorepo, or a profile README.",
     tag: "templates",
     tone: "accent" as const,
   },
   {
     icon: KeyRound,
     title: "Works with no API key",
-    body: "Analyzer, editor, preview, badges and templates are entirely local. Add an Anthropic key only if you want Claude to write the prose on top.",
+    body: "The analyzer, editor, preview, badges and templates all run in your browser. No account, no key, no upload.",
     tag: "offline",
     tone: "success" as const,
   },
@@ -75,9 +75,9 @@ const STEPS = [
   },
   {
     n: 2,
-    t: "Generate",
-    d: "Parse it locally in an instant, or hand it to Claude for the prose.",
-    cmd: "analyze --local  # or --claude",
+    t: "Analyze",
+    d: "Manifests, scripts, env vars and structure, parsed in an instant.",
+    cmd: "analyze --local",
   },
   {
     n: 3,
@@ -130,7 +130,9 @@ export default function Home() {
             <span className="hidden items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 py-1 text-xs text-dim sm:inline-flex">
               <Star size={13} className="text-amber" />
               Star
-              <span className="ml-1 border-l border-line pl-1.5 tabular-nums">1.2k</span>
+              <span className="ml-1 border-l border-line pl-1.5 tabular-nums">
+                1.2k
+              </span>
             </span>
             <Link
               href="/builder"
@@ -154,12 +156,17 @@ export default function Home() {
       {/* ---------------------------------------------------------------- */}
       {/* Hero                                                              */}
       {/* ---------------------------------------------------------------- */}
-      <section id="overview" className="mx-auto max-w-6xl scroll-mt-14 px-6 pt-14 pb-10">
+      <section
+        id="overview"
+        className="mx-auto max-w-6xl scroll-mt-14 px-6 pt-14 pb-10"
+      >
         <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <div>
             <div
               className="mb-5 flex items-center gap-2 font-mono text-sm"
-              style={{ animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) both" }}
+              style={{
+                animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) both",
+              }}
             >
               <FileText size={15} className="text-dim" />
               <span className="text-accent">preface</span>
@@ -170,7 +177,9 @@ export default function Home() {
 
             <h1
               className="text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl"
-              style={{ animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 60ms both" }}
+              style={{
+                animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 60ms both",
+              }}
             >
               Your code deserves a README
               <span className="text-lime"> people actually read.</span>
@@ -178,16 +187,21 @@ export default function Home() {
 
             <p
               className="mt-5 max-w-xl text-base leading-relaxed text-dim text-pretty"
-              style={{ animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 120ms both" }}
+              style={{
+                animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 120ms both",
+              }}
             >
-              Dump your project in (manifests, file trees, half-written notes) and get back a
-              structured README. Then shape it with a live GitHub-accurate preview, a badge
-              builder, and five very different templates.
+              Dump your project in (manifests, file trees, half-written notes)
+              and get back a structured README. Then shape it with a live
+              GitHub-accurate preview, a badge builder, and five very different
+              templates.
             </p>
 
             <div
               className="mt-7 flex flex-wrap items-center gap-3"
-              style={{ animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 180ms both" }}
+              style={{
+                animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 180ms both",
+              }}
             >
               <Link
                 href="/builder"
@@ -208,7 +222,9 @@ export default function Home() {
             {/* Language bar, like a repo sidebar */}
             <div
               className="mt-9 max-w-md"
-              style={{ animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 240ms both" }}
+              style={{
+                animation: "gh-fade-up .5s cubic-bezier(.2,.7,.3,1) 240ms both",
+              }}
             >
               <div className="flex h-2 overflow-hidden rounded-full">
                 {LANG_BAR.map((l) => (
@@ -222,7 +238,10 @@ export default function Home() {
               </div>
               <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-dim">
                 {LANG_BAR.map((l) => (
-                  <span key={l.name} className="inline-flex items-center gap-1.5">
+                  <span
+                    key={l.name}
+                    className="inline-flex items-center gap-1.5"
+                  >
                     <span
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ background: l.color }}
@@ -238,25 +257,34 @@ export default function Home() {
           {/* Contribution graph card */}
           <div
             className="rounded-md border border-line bg-bg p-4"
-            style={{ animation: "gh-fade-up .55s cubic-bezier(.2,.7,.3,1) 200ms both" }}
+            style={{
+              animation: "gh-fade-up .55s cubic-bezier(.2,.7,.3,1) 200ms both",
+            }}
           >
+            {/* The graph is decoration, so it is labelled as decoration. */}
             <p className="mb-3 text-xs text-dim">
-              <span className="font-semibold text-ink">1,284 READMEs</span> generated this year
+              <span className="font-semibold text-ink">Every section</span>{" "}
+              toggleable, in any template
             </p>
             <ContribGraph />
             <div className="mt-3 flex items-center gap-2 text-[11px] text-faint">
               <span>Less</span>
-              {["#151b23", "#033a16", "#196c2e", "#2ea043", "#56d364"].map((c) => (
-                <span
-                  key={c}
-                  className="h-[10px] w-[10px] rounded-[2px]"
-                  style={{
-                    background: c,
-                    outline: c === "#151b23" ? "1px solid rgba(240,246,252,0.06)" : "none",
-                    outlineOffset: "-1px",
-                  }}
-                />
-              ))}
+              {["#151b23", "#033a16", "#196c2e", "#2ea043", "#56d364"].map(
+                (c) => (
+                  <span
+                    key={c}
+                    className="h-[10px] w-[10px] rounded-[2px]"
+                    style={{
+                      background: c,
+                      outline:
+                        c === "#151b23"
+                          ? "1px solid rgba(240,246,252,0.06)"
+                          : "none",
+                      outlineOffset: "-1px",
+                    }}
+                  />
+                ),
+              )}
               <span>More</span>
             </div>
           </div>
@@ -271,13 +299,19 @@ export default function Home() {
       {/* ---------------------------------------------------------------- */}
       {/* Features                                                          */}
       {/* ---------------------------------------------------------------- */}
-      <section id="features" className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16">
+      <section
+        id="features"
+        className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16"
+      >
         <Reveal>
           <div className="mb-8 flex items-end justify-between gap-4 border-b border-line pb-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Everything the first draft needs</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Everything the first draft needs
+              </h2>
               <p className="mt-1.5 text-sm text-dim">
-                Preface does the mechanical work so the only thing left is the part that needs you.
+                Preface does the mechanical work so the only thing left is the
+                part that needs you.
               </p>
             </div>
             <Label tone="accent">{FEATURES.length} features</Label>
@@ -294,7 +328,9 @@ export default function Home() {
                   </span>
                   <Label tone={f.tone}>{f.tag}</Label>
                 </div>
-                <h3 className="mb-1.5 text-sm font-semibold text-ink">{f.title}</h3>
+                <h3 className="mb-1.5 text-sm font-semibold text-ink">
+                  {f.title}
+                </h3>
                 <p className="text-[13px] leading-relaxed text-dim">{f.body}</p>
               </div>
             </Reveal>
@@ -305,14 +341,19 @@ export default function Home() {
       {/* ---------------------------------------------------------------- */}
       {/* Templates: GitHub file-list rows                                 */}
       {/* ---------------------------------------------------------------- */}
-      <section id="templates" className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16">
+      <section
+        id="templates"
+        className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16"
+      >
         <Reveal>
           <div className="mb-8 flex items-end justify-between gap-4 border-b border-line pb-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">One spec, every template</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                One spec, every template
+              </h2>
               <p className="mt-1.5 text-sm text-dim">
-                Switching template never loses content. The same structured data is re-rendered
-                with different chrome.
+                Switching template never loses content. The same structured data
+                is re-rendered with different chrome.
               </p>
             </div>
             <Label tone="done">{TEMPLATES.length} templates</Label>
@@ -323,8 +364,12 @@ export default function Home() {
           <div className="overflow-hidden rounded-md border border-line">
             <div className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5 text-xs text-dim">
               <LayoutTemplate size={14} />
-              <span className="font-semibold text-ink">src/lib/templates.ts</span>
-              <span className="ml-auto hidden font-mono sm:inline">{TEMPLATES.length} objects</span>
+              <span className="font-semibold text-ink">
+                src/lib/templates.ts
+              </span>
+              <span className="ml-auto hidden font-mono sm:inline">
+                {TEMPLATES.length} objects
+              </span>
             </div>
             <ul>
               {TEMPLATES.map((t, i) => (
@@ -337,7 +382,10 @@ export default function Home() {
                       animationDelay: `${i * 60}ms`,
                     }}
                   >
-                    <FileText size={15} className="shrink-0 text-dim transition-colors group-hover:text-accent" />
+                    <FileText
+                      size={15}
+                      className="shrink-0 text-dim transition-colors group-hover:text-accent"
+                    />
                     <span className="w-36 shrink-0 truncate text-sm font-medium text-accent group-hover:underline">
                       {t.name}
                     </span>
@@ -362,12 +410,19 @@ export default function Home() {
       {/* ---------------------------------------------------------------- */}
       {/* Workflow: Actions-style pipeline                                 */}
       {/* ---------------------------------------------------------------- */}
-      <section id="workflow" className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16">
+      <section
+        id="workflow"
+        className="mx-auto max-w-6xl scroll-mt-14 px-6 py-16"
+      >
         <Reveal>
           <div className="mb-8 flex items-end justify-between gap-4 border-b border-line pb-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">How it works</h2>
-              <p className="mt-1.5 text-sm text-dim">Four steps, about thirty seconds.</p>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                How it works
+              </h2>
+              <p className="mt-1.5 text-sm text-dim">
+                Four steps, about thirty seconds.
+              </p>
             </div>
             <Label tone="success">{STEPS.length} jobs</Label>
           </div>
@@ -413,7 +468,8 @@ export default function Home() {
                 Stop shipping a README that just says the project name.
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm text-dim text-pretty">
-                No account, no upload, nothing to configure. Open the builder and paste something.
+                No account, no upload, nothing to configure. Open the builder
+                and paste something.
               </p>
               <Link
                 href="/builder"
@@ -431,15 +487,18 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
             <div>
-              <Link href="/" className="brand mb-3 inline-flex items-center gap-2.5 text-ink">
+              <Link
+                href="/"
+                className="brand mb-3 inline-flex items-center gap-2.5 text-ink"
+              >
                 <span className="brand-mark">
                   <PrefaceMark size={26} />
                 </span>
                 <Wordmark className="font-mono text-lg font-semibold tracking-tight" />
               </Link>
               <p className="max-w-xs text-[13px] leading-relaxed text-dim">
-                Dump your project in, get a well organised README out. No account, no upload,
-                nothing to configure.
+                Dump your project in, get a well organised README out. No
+                account, no upload, nothing to configure.
               </p>
             </div>
 
@@ -447,17 +506,26 @@ export default function Home() {
               <h3 className="mb-3 text-xs font-semibold text-ink">Product</h3>
               <ul className="space-y-2 text-[13px] text-dim">
                 <li>
-                  <Link href="/builder" className="ulink transition-colors hover:text-ink">
+                  <Link
+                    href="/builder"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Builder
                   </Link>
                 </li>
                 <li>
-                  <a href="#templates" className="ulink transition-colors hover:text-ink">
+                  <a
+                    href="#templates"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Templates
                   </a>
                 </li>
                 <li>
-                  <a href="#features" className="ulink transition-colors hover:text-ink">
+                  <a
+                    href="#features"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Badges
                   </a>
                 </li>
@@ -468,17 +536,26 @@ export default function Home() {
               <h3 className="mb-3 text-xs font-semibold text-ink">Learn</h3>
               <ul className="space-y-2 text-[13px] text-dim">
                 <li>
-                  <a href="#overview" className="ulink transition-colors hover:text-ink">
+                  <a
+                    href="#overview"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Overview
                   </a>
                 </li>
                 <li>
-                  <a href="#features" className="ulink transition-colors hover:text-ink">
+                  <a
+                    href="#features"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Features
                   </a>
                 </li>
                 <li>
-                  <a href="#workflow" className="ulink transition-colors hover:text-ink">
+                  <a
+                    href="#workflow"
+                    className="ulink transition-colors hover:text-ink"
+                  >
                     Workflow
                   </a>
                 </li>
@@ -498,7 +575,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                  Claude pass optional
+                  Open source, MIT
                 </li>
               </ul>
             </div>
@@ -506,7 +583,7 @@ export default function Home() {
 
           <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-line pt-6 text-xs text-faint sm:flex-row">
             <span>Preface, a README generator and editor.</span>
-            <span className="font-mono">built with next.js, tailwind and the claude api</span>
+            <span className="font-mono">built with next.js and tailwind</span>
           </div>
         </div>
       </footer>

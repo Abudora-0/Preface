@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-114_passing-3fb950?style=for-the-badge" alt="114 tests passing" />
+  <img src="https://img.shields.io/badge/tests-118_passing-3fb950?style=for-the-badge" alt="118 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
@@ -38,6 +38,7 @@ and costs nothing.
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
+- [Deploying](#deploying)
 - [Templates](#templates)
 - [How it works](#how-it-works)
 - [Tests](#tests)
@@ -105,6 +106,7 @@ of it.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `PREFACE_DISABLE_AI` | unset | Set to `1` on a hosted deployment to hide the generation pass entirely |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Where the local Ollama daemon is listening |
 | `OLLAMA_MODEL` | `qwen2.5:1.5b` | The model to generate with. Must already be pulled. |
 | `AI_PROVIDER` | `ollama` | Set to `anthropic` to use Claude instead |
@@ -115,6 +117,27 @@ of it.
 present in the environment. A key can be exported by an unrelated tool, and
 billing an API because of an ambient variable is not a decision this app makes
 for you.
+
+## Deploying
+
+Generation needs a model the server can reach. Hosted, the default Ollama URL
+is the server's own loopback with nothing behind it, so the pass can never run
+there, and a disabled button telling visitors to start `ollama serve` is advice
+they cannot act on.
+
+```bash
+PREFACE_DISABLE_AI=1
+```
+
+Set that and the deployment is a parser and editor: the Generate button, the
+model status probe and the AI wording are not rendered at all, and
+`/api/generate` answers 404. Everything else is unaffected, and the analyzer
+runs in the browser either way. Leave it unset locally to get the model pass
+back.
+
+Set `GITHUB_TOKEN` as well when hosting. The unauthenticated GitHub limit of 60
+requests an hour is counted per IP, and a serverless deployment puts every
+visitor behind the same one.
 
 ## Templates
 

@@ -113,6 +113,8 @@ export type GenState = {
 
 type AiStatus = {
   provider: "ollama" | "anthropic";
+  /** False when this deployment does not offer generation at all. */
+  offered?: boolean;
   ai: boolean;
   ollama?: {
     up: boolean;
@@ -269,6 +271,14 @@ export default function BuilderPage() {
       .catch(() => setAiAvailable(false));
   }, []);
 
+  /*
+   * A deployment with no reachable model hides generation rather than showing
+   * a disabled button, so the panel is told whether to offer it at all. Until
+   * the status probe answers, assume it is offered: flashing the controls away
+   * on a slow response is worse than a moment of optimism.
+   */
+  const aiOffered = aiStatus?.offered !== false;
+
   const aiLabel =
     aiStatus?.provider === "anthropic"
       ? "Claude"
@@ -410,7 +420,9 @@ export default function BuilderPage() {
           }
 
           if (event.type === "phase") {
-            setProgress((p) => (p ? { ...p, field: event.label, isPhase: true } : p));
+            setProgress((p) =>
+              p ? { ...p, field: event.label, isPhase: true } : p,
+            );
           } else if (event.type === "progress") {
             setProgress((p) =>
               p
@@ -776,6 +788,7 @@ export default function BuilderPage() {
                     onDumpChange={setDump}
                     onAnalyze={runAnalyze}
                     onGenerate={runGenerate}
+                    aiOffered={aiOffered}
                     aiAvailable={aiAvailable}
                     aiLabel={aiLabel}
                     aiHint={aiHint}

@@ -25,6 +25,24 @@ export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "qwen2.5:1.5b";
  * shell profile), and silently routing generation to a paid API because of an
  * ambient variable is not a decision this code should make for anyone.
  */
+/**
+ * Whether this deployment offers the generation pass at all.
+ *
+ * Generation needs a model the server can actually reach. Hosted, the default
+ * Ollama URL is the container's own loopback with nothing behind it, so the
+ * feature can never work and a disabled button with instructions to run
+ * "ollama serve" is advice the visitor cannot act on. Setting this turns the
+ * feature off outright rather than showing it broken.
+ *
+ * Off by default, so a local checkout keeps working with no configuration.
+ */
+export function aiOffered(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const off = env.PREFACE_DISABLE_AI?.trim().toLowerCase();
+  return !(off === "1" || off === "true");
+}
+
 export function resolveProvider(
   env: Record<string, string | undefined> = process.env,
 ): AiProvider {

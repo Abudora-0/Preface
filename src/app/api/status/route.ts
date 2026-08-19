@@ -1,5 +1,6 @@
 import {
   OLLAMA_MODEL,
+  aiOffered,
   OLLAMA_URL,
   isEmbeddingModel,
   ollamaStatus,
@@ -19,12 +20,28 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const provider = resolveProvider();
 
+  /*
+   * A deployment with no reachable model hides the feature instead of showing
+   * it disabled, so nothing else about it needs to be reported.
+   */
+  if (!aiOffered()) {
+    return Response.json({
+      provider,
+      offered: false,
+      ai: false,
+      githubToken: Boolean(process.env.GITHUB_TOKEN),
+    });
+  }
+
   if (provider === "ollama") {
     const { up, models } = await ollamaStatus();
-    const hasModel = models.some((m) => m === OLLAMA_MODEL || m.startsWith(`${OLLAMA_MODEL}:`));
+    const hasModel = models.some(
+      (m) => m === OLLAMA_MODEL || m.startsWith(`${OLLAMA_MODEL}:`),
+    );
     const embedding = isEmbeddingModel(OLLAMA_MODEL);
     return Response.json({
       provider,
+      offered: true,
       ai: up && hasModel && !embedding,
       ollama: {
         up,
@@ -40,6 +57,7 @@ export async function GET() {
 
   return Response.json({
     provider,
+    offered: true,
     ai: Boolean(process.env.ANTHROPIC_API_KEY),
     githubToken: Boolean(process.env.GITHUB_TOKEN),
   });
