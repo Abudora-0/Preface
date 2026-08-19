@@ -83,6 +83,21 @@ describe("normalizeSpec", () => {
     expect(spec.license).toBe("MIT");
   });
 
+  it("is idempotent, so applying it on an already-good spec changes nothing", () => {
+    // It runs on the analyzer and API results too, which are already complete.
+    const good = {
+      ...emptySpec(),
+      name: "orbit-api",
+      template: "monorepo" as const,
+      packages: [{ name: "@orbit/core", path: "packages/core" }],
+      repoUrl: "https://github.com/x/y",
+      sections: { ...DEFAULT_SECTIONS, faq: true },
+    };
+
+    expect(normalizeSpec(good)).toEqual(good);
+    expect(normalizeSpec(normalizeSpec(good))).toEqual(good);
+  });
+
   it("survives corrupt storage entirely", () => {
     for (const junk of [null, undefined, "a string", 42, []]) {
       expect(() => normalizeSpec(junk)).not.toThrow();

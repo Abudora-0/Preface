@@ -251,8 +251,14 @@ export default function BuilderPage() {
     return () => clearTimeout(id);
   }, [spec, markdown, manual, dump]);
 
+  /*
+   * Every spec that did not come from this component arrives here: the
+   * analyzer, the generate endpoint and the repo import. The last two cross
+   * the network, so they get the same shape repair a restored draft gets
+   * rather than being trusted to be complete.
+   */
   const applySpec = useCallback((next: ProjectSpec) => {
-    setSpec(next);
+    setSpec(normalizeSpec(next));
     setOverride(null);
   }, []);
 
