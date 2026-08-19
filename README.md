@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-108_passing-3fb950?style=for-the-badge" alt="108 tests passing" />
+  <img src="https://img.shields.io/badge/tests-114_passing-3fb950?style=for-the-badge" alt="114 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
@@ -128,6 +128,12 @@ for you.
 | GitHub Action | Anything published to the Actions marketplace |
 | Monorepo | Workspaces with several published packages |
 | Profile README | `github.com/<you>/<you>` |
+
+The model may describe workspace packages and Action inputs and outputs, but
+it may not decide which ones exist. Those names are read out of the member
+manifests and `action.yml`, and people copy the resulting tables straight into
+a workflow file, so an invented entry would be a broken instruction rather than
+flat prose.
 
 Two of these carry their own data. Paste or import an `action.yml` and the inputs
 and outputs tables fill themselves, then the workflow snippet is generated from

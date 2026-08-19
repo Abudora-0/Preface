@@ -144,6 +144,83 @@ describe("merge", () => {
     expect(merged.techStack).toEqual(["TypeScript"]);
   });
 
+  it("takes model descriptions for workspace packages the parser found", () => {
+    const merged = mergeSpec(
+      base({ packages: [{ name: "@orbit/core", path: "packages/core" }] }),
+      { packages: [{ name: "@orbit/core", desc: "Orbital mechanics solver" }] },
+    );
+
+    expect(merged.packages).toEqual([
+      { name: "@orbit/core", path: "packages/core", desc: "Orbital mechanics solver" },
+    ]);
+  });
+
+  it("never lets the model invent a workspace package", () => {
+    // A fabricated package name becomes a broken install command in the table.
+    const merged = mergeSpec(base({ packages: [{ name: "@orbit/core" }] }), {
+      packages: [
+        { name: "@orbit/core", desc: "Real" },
+        { name: "@orbit/ghost", desc: "Never existed" },
+      ],
+    });
+
+    expect(merged.packages.map((p) => p.name)).toEqual(["@orbit/core"]);
+  });
+
+  it("adds no packages at all when the parser found none", () => {
+    const merged = mergeSpec(base(), {
+      packages: [{ name: "@orbit/invented", desc: "Not in any manifest" }],
+    });
+
+    expect(merged.packages).toEqual([]);
+  });
+
+  it("describes action inputs and outputs without changing which exist", () => {
+    const merged = mergeSpec(
+      base({
+        inputs: [
+          { name: "token", required: true },
+          { name: "path", default: "." },
+        ],
+        outputs: [{ name: "result" }],
+      }),
+      {
+        inputs: [
+          { name: "token", desc: "GitHub token" },
+          { name: "ghost", desc: "Not declared in action.yml" },
+        ],
+        outputs: [{ name: "result", desc: "The computed value" }],
+      },
+    );
+
+    expect(merged.inputs).toEqual([
+      { name: "token", required: true, desc: "GitHub token" },
+      { name: "path", default: "." },
+    ]);
+    expect(merged.outputs).toEqual([{ name: "result", desc: "The computed value" }]);
+  });
+
+  it("keeps the parsed description when the model skips an entry", () => {
+    const merged = mergeSpec(
+      base({ packages: [{ name: "@orbit/core", desc: "From the manifest" }] }),
+      { packages: [] },
+    );
+
+    expect(merged.packages[0].desc).toBe("From the manifest");
+  });
+
+  it("survives wrong types in packages, inputs and outputs", () => {
+    const merged = mergeSpec(base({ packages: [{ name: "@orbit/core" }] }), {
+      packages: "not an array",
+      inputs: [null, 42],
+      outputs: { nope: true },
+    });
+
+    expect(merged.packages).toEqual([{ name: "@orbit/core" }]);
+    expect(merged.inputs).toEqual([]);
+    expect(merged.outputs).toEqual([]);
+  });
+
   it("switches sections on and off to match what survived the merge", () => {
     const merged = mergeSpec(base(), { faq: [{ q: "Q", a: "A" }] });
     expect(merged.sections.faq).toBe(true);

@@ -86,6 +86,7 @@ Rules:
 - Feature titles are two to four words. Feature descriptions are one sentence.
 - Install commands must match the package manager actually evidenced in the material.
 - For env vars, infer the description from how the variable is used in the code.
+- For packages, inputs and outputs, describe only the names already listed in the extraction. Never add a name that is not there: those tables are copied into other people's workflows and manifests, so an invented entry breaks them.
 - Prefer the deterministic extraction for factual fields (script names, dependency names, env var keys). Improve on it for prose fields (tagline, description, feature wording).
 - Return "" for any string you cannot ground, and [] for any list you cannot ground.
 - Reply with JSON only. No prose outside the JSON object.`;
@@ -140,6 +141,32 @@ export const SPEC_SCHEMA = {
         ["key", "desc", "example"],
       ),
     },
+    /*
+     * Only the name and a description are asked for. Paths, defaults and the
+     * required flag are read out of the manifests, and a model restating them
+     * could only get them wrong.
+     */
+    packages: {
+      type: "array",
+      items: strObj({ name: { type: "string" }, desc: { type: "string" } }, [
+        "name",
+        "desc",
+      ]),
+    },
+    inputs: {
+      type: "array",
+      items: strObj({ name: { type: "string" }, desc: { type: "string" } }, [
+        "name",
+        "desc",
+      ]),
+    },
+    outputs: {
+      type: "array",
+      items: strObj({ name: { type: "string" }, desc: { type: "string" } }, [
+        "name",
+        "desc",
+      ]),
+    },
     roadmap: { type: "array", items: { type: "string" } },
     faq: {
       type: "array",
@@ -163,6 +190,9 @@ export const SPEC_SCHEMA = {
     "usageLang",
     "scripts",
     "env",
+    "packages",
+    "inputs",
+    "outputs",
     "roadmap",
     "faq",
     "license",
@@ -174,23 +204,32 @@ export function buildUserMessage(
   dump: string,
   hint?: string,
 ): string {
+  const extraction: Record<string, unknown> = {
+    name: base.name,
+    license: base.license,
+    packageManager: base.packageManager,
+    languages: base.languages,
+    techStack: base.techStack,
+    scripts: base.scripts,
+    envKeys: base.env.map((e) => e.key),
+    install: base.install,
+  };
+
+  /*
+   * These are the names the model is allowed to describe and no more, so it
+   * has to be shown them. They are omitted entirely when empty: most projects
+   * are neither a workspace nor an Action, and an empty key is context spent
+   * for nothing on a model with 16k to work in.
+   */
+  if (base.packages.length)
+    extraction.packages = base.packages.map((p) => p.name);
+  if (base.inputs.length) extraction.inputs = base.inputs.map((i) => i.name);
+  if (base.outputs.length) extraction.outputs = base.outputs.map((o) => o.name);
+
   return [
     "## Deterministic extraction (already parsed from the material)",
     "```json",
-    JSON.stringify(
-      {
-        name: base.name,
-        license: base.license,
-        packageManager: base.packageManager,
-        languages: base.languages,
-        techStack: base.techStack,
-        scripts: base.scripts,
-        envKeys: base.env.map((e) => e.key),
-        install: base.install,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify(extraction, null, 2),
     "```",
     "",
     hint ? `## Author's note\n${hint}\n` : "",
@@ -250,6 +289,9 @@ export const SPEC_FIELDS: { key: string; label: string }[] = [
   { key: "usageLang", label: "the usage language" },
   { key: "scripts", label: "scripts" },
   { key: "env", label: "environment variables" },
+  { key: "packages", label: "workspace packages" },
+  { key: "inputs", label: "action inputs" },
+  { key: "outputs", label: "action outputs" },
   { key: "roadmap", label: "the roadmap" },
   { key: "faq", label: "the FAQ" },
   { key: "license", label: "the license" },
@@ -429,6 +471,32 @@ function strList(v: unknown): string[] {
 }
 
 /** AI output wins on prose; deterministic output wins on anything it found. */
+/**
+ * Applies model written descriptions to entries the parser found, matched on
+ * name. Entries the model made up are dropped, and an entry the model did not
+ * mention keeps whatever description it already had.
+ */
+function describeByName<T extends { name: string; desc?: string }>(
+  found: T[],
+  fromAi: unknown,
+): T[] {
+  if (!found.length) return found;
+
+  const descByName = new Map<string, string>();
+  if (Array.isArray(fromAi)) {
+    for (const entry of fromAi as AiSpec[]) {
+      const name = str(entry.name);
+      const desc = str(entry.desc);
+      if (name && desc) descByName.set(name, desc);
+    }
+  }
+
+  return found.map((entry) => ({
+    ...entry,
+    desc: descByName.get(entry.name) ?? entry.desc,
+  }));
+}
+
 export function mergeSpec(base: ProjectSpec, ai: AiSpec): ProjectSpec {
   const spec: ProjectSpec = { ...base };
 
@@ -506,6 +574,18 @@ export function mergeSpec(base: ProjectSpec, ai: AiSpec): ProjectSpec {
       .filter(([k]) => !seen.has(k))
       .map(([key, v]) => ({ key, ...v })),
   ];
+
+  /*
+   * Workspace packages and Action inputs and outputs are structural facts,
+   * read out of member manifests and action.yml. People copy those tables
+   * straight into a workflow file or an install command, so an entry the
+   * model invented would not be flat prose, it would be a broken instruction.
+   * The parser therefore owns which entries exist and the model may only
+   * describe the ones already there.
+   */
+  spec.packages = describeByName(base.packages, ai.packages);
+  spec.inputs = describeByName(base.inputs, ai.inputs);
+  spec.outputs = describeByName(base.outputs, ai.outputs);
 
   spec.roadmap = strList(ai.roadmap);
 
