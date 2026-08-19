@@ -399,6 +399,8 @@ function tomlDepNames(table: string): string[] {
 }
 
 type TomlManifest = {
+  /** Which manifest supplied this, which is also the language it implies. */
+  kind: "cargo" | "python";
   name?: string;
   description?: string;
   license?: string;
@@ -418,10 +420,9 @@ type TomlManifest = {
  */
 function parseTomlManifest(text: string): TomlManifest | null {
   // Cargo's [package], PEP 621's [project], and Poetry's older [tool.poetry].
+  const cargo = tomlTable(text, "[package]");
   const table =
-    tomlTable(text, "[package]") ??
-    tomlTable(text, "[project]") ??
-    tomlTable(text, "[tool.poetry]");
+    cargo ?? tomlTable(text, "[project]") ?? tomlTable(text, "[tool.poetry]");
   if (table === null) return null;
 
   const name = tomlString(table, "name");
@@ -445,6 +446,7 @@ function parseTomlManifest(text: string): TomlManifest | null {
   ];
 
   return {
+    kind: cargo === null ? "python" : "cargo",
     name,
     description,
     license: tomlString(table, "license"),
@@ -453,6 +455,72 @@ function parseTomlManifest(text: string): TomlManifest | null {
     author: tomlFirstOfArray(table, "authors") ?? tomlString(table, "authors"),
     scripts: scripts.slice(0, 20),
     deps,
+  };
+}
+
+/** Forges where a module path maps cleanly onto a browsable repository URL. */
+const GO_FORGES = ["github.com", "gitlab.com", "bitbucket.org", "codeberg.org"];
+
+/**
+ * Last meaningful segment of a Go module path.
+ *
+ * Paths can carry a major-version segment, as in `github.com/go-chi/chi/v5`,
+ * which names the release rather than the library.
+ */
+function goBaseName(path: string): string | undefined {
+  const segments = path.split("/").filter(Boolean);
+  while (segments.length > 1 && /^v\d+$/.test(segments[segments.length - 1])) {
+    segments.pop();
+  }
+  return segments[segments.length - 1];
+}
+
+type GoModule = {
+  name?: string;
+  repoUrl?: string;
+  goVersion?: string;
+  deps: string[];
+};
+
+/**
+ * Reads a go.mod.
+ *
+ * The format carries no description or licence, so unlike the other manifests
+ * this only supplies a name, the repository it lives at, the Go version and
+ * the direct dependencies. Indirect requirements are skipped: they are what
+ * the module graph dragged in, not what this project chose to use, so they
+ * would describe someone else's project in the tech stack.
+ */
+function parseGoMod(text: string): GoModule | null {
+  const decl = /^\s*module\s+(\S+)\s*$/m.exec(text);
+  if (!decl) return null;
+
+  const path = decl[1].replace(/^["']|["']$/g, "");
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+
+  let repoUrl: string | undefined;
+  if (GO_FORGES.includes(segments[0].toLowerCase()) && segments.length >= 3) {
+    repoUrl = `https://${segments.slice(0, 3).join("/")}`;
+  }
+
+  const deps: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (/\/\/\s*indirect/.test(line)) continue;
+    const m =
+      /^\s*(?:require\s+)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/[\w./-]+)\s+v\d/.exec(
+        line,
+      );
+    if (!m) continue;
+    const base = goBaseName(m[1]);
+    if (base) deps.push(base.toLowerCase());
+  }
+
+  return {
+    name: goBaseName(path),
+    repoUrl,
+    goVersion: /^\s*go\s+(\d+\.\d+(?:\.\d+)?)\s*$/m.exec(text)?.[1],
+    deps: [...new Set(deps)],
   };
 }
 
@@ -637,6 +705,21 @@ export function analyzeDump(dump: string): Analysis {
       spec.scripts = toml.scripts;
   }
 
+  /*
+   * go.mod last, and it fills the least: the format has no description or
+   * licence to give. What it does have is the module path, which is both the
+   * project's name and the address it lives at.
+   */
+  const gomod = parseGoMod(text);
+  if (gomod) {
+    notes.push("Parsed go.mod");
+    if (!spec.name && gomod.name) spec.name = titleCase(gomod.name);
+    if (!spec.repoUrl && gomod.repoUrl) spec.repoUrl = gomod.repoUrl;
+    if (!spec.prerequisites.length && gomod.goVersion) {
+      spec.prerequisites = [`Go ${gomod.goVersion} or newer`];
+    }
+  }
+
   if (!spec.repoUrl) {
     const repo = parseRepo(text);
     if (repo) spec.repoUrl = `https://github.com/${repo}`;
@@ -666,6 +749,15 @@ export function analyzeDump(dump: string): Analysis {
   }
   for (const d of detectPythonDeps(text)) deps.add(d);
   for (const d of toml?.deps ?? []) deps.add(d);
+  for (const d of gomod?.deps ?? []) deps.add(d);
+
+  /*
+   * A manifest is proof of its own language. Without this a bare go.mod or
+   * Cargo.toml pasted on its own detected nothing at all, because the language
+   * was only ever inferred from source file extensions in the dump.
+   */
+  if (gomod) deps.add("go");
+  if (toml) deps.add(toml.kind === "cargo" ? "rust" : "python");
   for (const kw of pkg?.keywords ?? []) deps.add(kw.toLowerCase());
 
   spec.languages = detectLanguages(text);
