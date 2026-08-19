@@ -1,5 +1,11 @@
 import { suggestBadges, techBadge, repoBadges } from "./badges";
-import { emptySpec, type EnvVar, type Feature, type ProjectSpec, type Script } from "./types";
+import {
+  emptySpec,
+  type EnvVar,
+  type Feature,
+  type ProjectSpec,
+  type Script,
+} from "./types";
 
 /**
  * Deterministic project analyzer.
@@ -99,7 +105,8 @@ function findPackageJson(text: string): PackageJson | null {
   for (const idx of candidates) {
     const raw = extractJsonAt(text, idx);
     if (!raw || raw.length < 20) continue;
-    if (!/"(name|scripts|dependencies|devDependencies)"\s*:/.test(raw)) continue;
+    if (!/"(name|scripts|dependencies|devDependencies)"\s*:/.test(raw))
+      continue;
     try {
       const parsed = JSON.parse(raw) as PackageJson;
       if (parsed.name || parsed.scripts || parsed.dependencies) return parsed;
@@ -129,7 +136,9 @@ function describeScript(name: string): string | undefined {
 }
 
 function parseRepo(text: string): string | undefined {
-  const m = text.match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:["'\s/)]|$)/i);
+  const m = text.match(
+    /github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:["'\s/)]|$)/i,
+  );
   if (!m) return undefined;
   return `${m[1]}/${m[2]}`;
 }
@@ -158,7 +167,10 @@ function detectEnvVars(text: string): EnvVar[] {
     const key = m[1];
     const example = m[2].trim().replace(/^["']|["']$/g, "");
     if (!found.has(key)) {
-      found.set(key, { key, example: example && example.length < 60 ? example : undefined });
+      found.set(key, {
+        key,
+        example: example && example.length < 60 ? example : undefined,
+      });
     }
   }
 
@@ -192,7 +204,12 @@ function parseActionBlock(text: string, key: "inputs" | "outputs") {
   if (!start) return [];
 
   const lines = text.slice(start.index + start[0].length).split(/\r?\n/);
-  const entries: { name: string; desc?: string; required?: boolean; default?: string }[] = [];
+  const entries: {
+    name: string;
+    desc?: string;
+    required?: boolean;
+    default?: string;
+  }[] = [];
   let baseIndent: number | null = null;
   let current: (typeof entries)[number] | null = null;
 
@@ -225,7 +242,9 @@ function parseActionBlock(text: string, key: "inputs" | "outputs") {
 
 /** True when the dump smells like an action.yml rather than any other YAML. */
 function looksLikeAction(text: string): boolean {
-  return /^runs:[ \t]*$/m.test(text) && /^(inputs|outputs|description):/m.test(text);
+  return (
+    /^runs:[ \t]*$/m.test(text) && /^(inputs|outputs|description):/m.test(text)
+  );
 }
 
 /**
@@ -233,7 +252,9 @@ function looksLikeAction(text: string): boolean {
  * header above it when one is present. People pasting a monorepo tend to
  * include several manifests, which is the signal this leans on.
  */
-function findAllPackageJson(text: string): { pkg: PackageJson; path?: string }[] {
+function findAllPackageJson(
+  text: string,
+): { pkg: PackageJson; path?: string }[] {
   const found: { pkg: PackageJson; path?: string }[] = [];
   const seen = new Set<string>();
   const re = /\{/g;
@@ -254,7 +275,9 @@ function findAllPackageJson(text: string): { pkg: PackageJson; path?: string }[]
 
     // Nearest preceding `--- some/path/package.json ---` marker, if any.
     const before = text.slice(Math.max(0, m.index - 400), m.index);
-    const header = [...before.matchAll(/---\s*([\w./@-]*?)package\.json\s*---/g)].pop();
+    const header = [
+      ...before.matchAll(/---\s*([\w./@-]*?)package\.json\s*---/g),
+    ].pop();
     const path = header?.[1]?.replace(/\/$/, "");
     found.push({ pkg, path: path || undefined });
 
@@ -265,11 +288,15 @@ function findAllPackageJson(text: string): { pkg: PackageJson; path?: string }[]
 }
 
 /** Workspace globs declared in package.json or pnpm-workspace.yaml. */
-function detectWorkspaceGlobs(text: string, root: PackageJson | null): string[] {
+function detectWorkspaceGlobs(
+  text: string,
+  root: PackageJson | null,
+): string[] {
   const globs: string[] = [];
   const ws = root?.workspaces;
   if (Array.isArray(ws)) globs.push(...ws.filter((w) => typeof w === "string"));
-  else if (ws && !Array.isArray(ws) && Array.isArray(ws.packages)) globs.push(...ws.packages);
+  else if (ws && !Array.isArray(ws) && Array.isArray(ws.packages))
+    globs.push(...ws.packages);
 
   if (/pnpm-workspace|^packages:/m.test(text)) {
     const block = /^packages:\s*$((?:\s*-\s*.+\s*)+)/m.exec(text);
@@ -306,9 +333,134 @@ function detectStructure(text: string): string | undefined {
   return best.join("\n");
 }
 
+/**
+ * One TOML table's body: the lines between its header and the next one.
+ *
+ * Deliberately not a TOML parser, in the same spirit as the action.yml reader
+ * above. A dump is a pile of pasted fragments rather than a valid document, so
+ * a real parser would reject the whole thing over one malformed line. This
+ * reads the few keys worth having and ignores everything else.
+ */
+function tomlTable(text: string, header: string): string | null {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((l) => l.trim() === header);
+  if (start === -1) return null;
+
+  const body: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].trim().startsWith("[")) break;
+    body.push(lines[i]);
+  }
+  return body.join("\n");
+}
+
+/** Splits `key = value`, returning the value only for an exact key match. */
+function tomlValue(line: string, key: string): string | null {
+  const eq = line.indexOf("=");
+  if (eq === -1) return null;
+  if (line.slice(0, eq).trim() !== key) return null;
+  return line.slice(eq + 1).trim();
+}
+
+/** A quoted value, or the `text` field of an inline table (PEP 621 license). */
+function tomlString(table: string, key: string): string | undefined {
+  for (const line of table.split(/\r?\n/)) {
+    const value = tomlValue(line, key);
+    if (value === null) continue;
+
+    const quoted = /^"([^"]*)"/.exec(value);
+    if (quoted) return quoted[1].trim() || undefined;
+
+    const inline = /text\s*=\s*"([^"]*)"/.exec(value);
+    if (inline) return inline[1].trim() || undefined;
+  }
+  return undefined;
+}
+
+/** First entry of an array of quoted strings, e.g. Cargo's `authors`. */
+function tomlFirstOfArray(table: string, key: string): string | undefined {
+  for (const line of table.split(/\r?\n/)) {
+    const value = tomlValue(line, key);
+    if (value === null) continue;
+    const first = /"([^"]+)"/.exec(value);
+    if (first) return first[1].trim() || undefined;
+  }
+  return undefined;
+}
+
+/** Dependency names from a table of `name = "^1.0"` or `name = { … }` lines. */
+function tomlDepNames(table: string): string[] {
+  const names: string[] = [];
+  for (const line of table.split(/\r?\n/)) {
+    const m = /^\s*([A-Za-z][\w.-]*)\s*=/.exec(line);
+    if (m) names.push(m[1].toLowerCase());
+  }
+  return names;
+}
+
+type TomlManifest = {
+  name?: string;
+  description?: string;
+  license?: string;
+  repoUrl?: string;
+  homepage?: string;
+  author?: string;
+  scripts: Script[];
+  deps: string[];
+};
+
+/**
+ * Reads the identity fields out of a Cargo.toml or a pyproject.toml.
+ *
+ * Without this a Rust or Python project came back titled "My Project": name,
+ * description and license were read from package.json alone, so every
+ * non-JavaScript dump lost the three fields a README most needs.
+ */
+function parseTomlManifest(text: string): TomlManifest | null {
+  // Cargo's [package], PEP 621's [project], and Poetry's older [tool.poetry].
+  const table =
+    tomlTable(text, "[package]") ??
+    tomlTable(text, "[project]") ??
+    tomlTable(text, "[tool.poetry]");
+  if (table === null) return null;
+
+  const name = tomlString(table, "name");
+  const description = tomlString(table, "description");
+  if (!name && !description) return null;
+
+  // Console entry points read as commands a user can actually run.
+  const scripts: Script[] = [];
+  for (const header of ["[project.scripts]", "[tool.poetry.scripts]"]) {
+    const body = tomlTable(text, header);
+    if (body === null) continue;
+    for (const line of body.split(/\r?\n/)) {
+      const m = /^\s*([A-Za-z][\w.-]*)\s*=\s*"[^"]+"/.exec(line);
+      if (m) scripts.push({ name: m[1], cmd: m[1] });
+    }
+  }
+
+  const deps = [
+    ...tomlDepNames(tomlTable(text, "[dependencies]") ?? ""),
+    ...tomlDepNames(tomlTable(text, "[tool.poetry.dependencies]") ?? ""),
+  ];
+
+  return {
+    name,
+    description,
+    license: tomlString(table, "license"),
+    repoUrl: tomlString(table, "repository"),
+    homepage: tomlString(table, "homepage"),
+    author: tomlFirstOfArray(table, "authors") ?? tomlString(table, "authors"),
+    scripts: scripts.slice(0, 20),
+    deps,
+  };
+}
+
 function detectPythonDeps(text: string): string[] {
   const deps: string[] = [];
-  const reqBlock = text.match(/(?:^|\n)([a-zA-Z0-9_.-]+(?:[=<>~!]=[\d.*]+)?\s*(?:\n[a-zA-Z0-9_.-]+(?:[=<>~!]=[\d.*]+)?\s*){2,})/);
+  const reqBlock = text.match(
+    /(?:^|\n)([a-zA-Z0-9_.-]+(?:[=<>~!]=[\d.*]+)?\s*(?:\n[a-zA-Z0-9_.-]+(?:[=<>~!]=[\d.*]+)?\s*){2,})/,
+  );
   if (reqBlock) {
     for (const line of reqBlock[1].split(/\r?\n/)) {
       const name = line.trim().split(/[=<>~!\[ ]/)[0];
@@ -325,8 +477,10 @@ function detectPackageManager(text: string): ProjectSpec["packageManager"] {
   if (/pnpm-lock\.yaml|\bpnpm (install|add|run)\b/.test(text)) return "pnpm";
   if (/\byarn\.lock\b|\byarn (add|install)\b/.test(text)) return "yarn";
   if (/\bbun\.lockb?\b|\bbun (install|add|run)\b/.test(text)) return "bun";
-  if (/package-lock\.json|\bnpm (install|run|ci)\b|"dependencies"/.test(text)) return "npm";
-  if (/requirements\.txt|pyproject\.toml|\bpip install\b/.test(text)) return "pip";
+  if (/package-lock\.json|\bnpm (install|run|ci)\b|"dependencies"/.test(text))
+    return "npm";
+  if (/requirements\.txt|pyproject\.toml|\bpip install\b/.test(text))
+    return "pip";
   if (/Cargo\.toml|\bcargo (build|run)\b/.test(text)) return "cargo";
   if (/\bgo\.mod\b|\bgo (build|run|mod)\b/.test(text)) return "go";
   return "other";
@@ -343,7 +497,11 @@ function installCommands(pm: ProjectSpec["packageManager"]): string[] {
     case "bun":
       return ["bun install"];
     case "pip":
-      return ["python -m venv .venv", "source .venv/bin/activate", "pip install -r requirements.txt"];
+      return [
+        "python -m venv .venv",
+        "source .venv/bin/activate",
+        "pip install -r requirements.txt",
+      ];
     case "cargo":
       return ["cargo build"];
     case "go":
@@ -353,8 +511,13 @@ function installCommands(pm: ProjectSpec["packageManager"]): string[] {
   }
 }
 
-function runCommand(pm: ProjectSpec["packageManager"], scripts: Script[]): string | undefined {
-  const dev = scripts.find((s) => s.name === "dev") ?? scripts.find((s) => s.name === "start");
+function runCommand(
+  pm: ProjectSpec["packageManager"],
+  scripts: Script[],
+): string | undefined {
+  const dev =
+    scripts.find((s) => s.name === "dev") ??
+    scripts.find((s) => s.name === "start");
   if (dev) {
     if (pm === "npm") return `npm run ${dev.name}`;
     if (pm === "yarn") return `yarn ${dev.name}`;
@@ -377,8 +540,13 @@ function detectUsage(text: string): { code: string; lang: string } | undefined {
     const code = m[2].trim();
     if (code.length < 20 || code.length > 1200) continue;
     if (/^\s*[{[]/.test(code)) continue; // raw JSON
-    if (/^(npm|yarn|pnpm|pip|cargo|go|git|docker)\b/m.test(code) && code.split("\n").length < 5) continue;
-    if (!best || code.length > best.code.length) best = { code, lang: lang || "bash" };
+    if (
+      /^(npm|yarn|pnpm|pip|cargo|go|git|docker)\b/m.test(code) &&
+      code.split("\n").length < 5
+    )
+      continue;
+    if (!best || code.length > best.code.length)
+      best = { code, lang: lang || "bash" };
   }
   return best;
 }
@@ -393,7 +561,8 @@ function detectFeatures(text: string): Feature[] {
     if (/^https?:\/\//.test(line)) continue;
     if (/^[\w.-]+\s*[:=]\s*[\d^~]/.test(line)) continue; // dependency line
     const split = line.match(/^\*\*(.+?)\*\*\s*[-–—:]?\s*(.*)$/);
-    if (split) out.push({ title: split[1].trim(), desc: split[2].trim() || undefined });
+    if (split)
+      out.push({ title: split[1].trim(), desc: split[2].trim() || undefined });
     else out.push({ title: line });
     if (out.length >= 12) break;
   }
@@ -424,20 +593,48 @@ export function analyzeDump(dump: string): Analysis {
       spec.description = pkg.description;
     }
     if (pkg.license) spec.license = pkg.license;
-    if (typeof pkg.author === "string") spec.author = pkg.author.replace(/\s*<.*$/, "").trim();
+    if (typeof pkg.author === "string")
+      spec.author = pkg.author.replace(/\s*<.*$/, "").trim();
     else if (pkg.author?.name) {
       spec.author = pkg.author.name;
       spec.authorUrl = pkg.author.url;
     }
     if (pkg.homepage) spec.demoUrl = pkg.homepage;
-    const repoUrl = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
-    if (repoUrl) spec.repoUrl = repoUrl.replace(/^git\+/, "").replace(/\.git$/, "");
+    const repoUrl =
+      typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
+    if (repoUrl)
+      spec.repoUrl = repoUrl.replace(/^git\+/, "").replace(/\.git$/, "");
     if (pkg.scripts) {
       spec.scripts = Object.entries(pkg.scripts)
         .filter(([, cmd]) => typeof cmd === "string")
         .slice(0, 20)
         .map(([name, cmd]) => ({ name, cmd, desc: describeScript(name) }));
     }
+  }
+
+  /*
+   * Cargo.toml and pyproject.toml fill the same fields, but only where
+   * package.json left a gap. A polyglot repo that ships both is still a
+   * JavaScript package first, and the manifest naming the published artifact
+   * should win over one describing a sidecar.
+   */
+  const toml = parseTomlManifest(text);
+  if (toml) {
+    notes.push("Parsed a Cargo or Python manifest");
+    if (!spec.name && toml.name) spec.name = titleCase(toml.name);
+    if (!spec.tagline && toml.description) {
+      spec.tagline = toml.description;
+      spec.description = toml.description;
+    }
+    if (!spec.license && toml.license) spec.license = toml.license;
+    if (!spec.author && toml.author) {
+      spec.author = toml.author.replace(/\s*<.*$/, "").trim();
+    }
+    if (!spec.demoUrl && toml.homepage) spec.demoUrl = toml.homepage;
+    if (!spec.repoUrl && toml.repoUrl)
+      spec.repoUrl = toml.repoUrl.replace(/\.git$/, "");
+    if (!spec.scripts.length && toml.scripts.length)
+      spec.scripts = toml.scripts;
   }
 
   if (!spec.repoUrl) {
@@ -459,11 +656,16 @@ export function analyzeDump(dump: string): Analysis {
   // Dependencies -> tech stack
   const deps = new Set<string>();
   if (pkg) {
-    for (const group of [pkg.dependencies, pkg.devDependencies, pkg.peerDependencies]) {
+    for (const group of [
+      pkg.dependencies,
+      pkg.devDependencies,
+      pkg.peerDependencies,
+    ]) {
       for (const dep of Object.keys(group ?? {})) deps.add(dep.toLowerCase());
     }
   }
   for (const d of detectPythonDeps(text)) deps.add(d);
+  for (const d of toml?.deps ?? []) deps.add(d);
   for (const kw of pkg?.keywords ?? []) deps.add(kw.toLowerCase());
 
   spec.languages = detectLanguages(text);
@@ -481,12 +683,17 @@ export function analyzeDump(dump: string): Analysis {
   spec.install = installCommands(spec.packageManager);
   if (spec.repoUrl && spec.install.length) {
     const dir = spec.repoUrl.split("/").filter(Boolean).pop() ?? "project";
-    spec.install = [`git clone ${spec.repoUrl}.git`, `cd ${dir}`, ...spec.install];
+    spec.install = [
+      `git clone ${spec.repoUrl}.git`,
+      `cd ${dir}`,
+      ...spec.install,
+    ];
   }
   spec.runCmd = runCommand(spec.packageManager, spec.scripts);
 
   spec.env = detectEnvVars(text);
-  if (spec.env.length) notes.push(`Found ${spec.env.length} environment variables`);
+  if (spec.env.length)
+    notes.push(`Found ${spec.env.length} environment variables`);
 
   const structure = detectStructure(text);
   if (structure) {
@@ -501,7 +708,8 @@ export function analyzeDump(dump: string): Analysis {
   }
 
   spec.features = detectFeatures(text);
-  if (spec.features.length) notes.push(`Collected ${spec.features.length} feature bullets`);
+  if (spec.features.length)
+    notes.push(`Collected ${spec.features.length} feature bullets`);
 
   {
     const manifests = findAllPackageJson(text);
@@ -523,10 +731,16 @@ export function analyzeDump(dump: string): Analysis {
 
   if (looksLikeAction(text)) {
     spec.inputs = parseActionBlock(text, "inputs");
-    spec.outputs = parseActionBlock(text, "outputs").map(({ name, desc }) => ({ name, desc }));
+    spec.outputs = parseActionBlock(text, "outputs").map(({ name, desc }) => ({
+      name,
+      desc,
+    }));
 
     // action.yml has its own name/description, which beat anything guessed.
-    const actionName = text.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, "");
+    const actionName = text
+      .match(/^name:\s*(.+)$/m)?.[1]
+      ?.trim()
+      .replace(/^['"]|['"]$/g, "");
     const actionDesc = text
       .match(/^description:\s*(.+)$/m)?.[1]
       ?.trim()
@@ -560,7 +774,8 @@ export function analyzeDump(dump: string): Analysis {
       if (!spec.description) spec.description = prose;
     }
   }
-  if (!spec.tagline) spec.tagline = `A ${spec.languages[0] ?? "software"} project.`;
+  if (!spec.tagline)
+    spec.tagline = `A ${spec.languages[0] ?? "software"} project.`;
   if (!spec.description) spec.description = spec.tagline;
 
   // Turn off sections with nothing to show.

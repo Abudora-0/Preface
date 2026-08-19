@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-127_passing-3fb950?style=for-the-badge" alt="127 tests passing" />
+  <img src="https://img.shields.io/badge/tests-137_passing-3fb950?style=for-the-badge" alt="137 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
@@ -55,6 +55,12 @@ author, repository, scripts, environment variables, language mix, dependency lis
 and file tree, plus `action.yml` inputs and outputs and workspace packages. All
 of that is deterministic and instant.
 
+Identity comes from `package.json`, `Cargo.toml` or `pyproject.toml`, so a Rust
+crate or a Python package is read as thoroughly as an npm one. Both PEP 621
+`[project]` and Poetry's older `[tool.poetry]` layout are understood, along with
+console entry points. Where a repository ships more than one manifest,
+`package.json` wins: it names the artifact people install.
+
 A model is only ever asked to improve the writing on top of that structure. Facts
 come from the parser and are never overwritten, which is what makes a small local
 model a reasonable choice: a weaker model produces flatter prose, not invented
@@ -64,7 +70,7 @@ dependencies.
 
 | Feature | Detail |
 | --- | --- |
-| **Dump in, README out** | Parses manifests for npm, pnpm, yarn, bun, pip, cargo and go, then detects the stack, scripts, env vars and structure |
+| **Dump in, README out** | Reads `package.json`, `Cargo.toml` and `pyproject.toml` for identity, detects npm, pnpm, yarn, bun, pip, cargo and go, then pulls out the stack, scripts, env vars and structure |
 | **Import from GitHub** | Paste a repo URL to pull description, license, language breakdown, topics and root manifests |
 | **Live preview** | GitHub-accurate rendering in both light and dark theme, with raw HTML allowed and sanitised |
 | **Badge builder** | Around eighty shields.io badges across languages, frameworks, databases and infrastructure, in four styles |
