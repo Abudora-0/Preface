@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-90_passing-3fb950?style=for-the-badge" alt="90 tests passing" />
+  <img src="https://img.shields.io/badge/tests-99_passing-3fb950?style=for-the-badge" alt="99 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
