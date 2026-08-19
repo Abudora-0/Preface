@@ -1,0 +1,820 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   GitHub Primer (dark default) palette.
+   Token *names* are kept stable so every existing className keeps working;
+   only the values changed from the old violet theme to GitHub's.
+--------------------------------------------------------------------------- */
+@theme {
+  /* Surfaces */
+  --color-bg: #0d1117; /* canvas.default */
+  --color-inset: #010409; /* canvas.inset: global nav, gutters */
+  --color-panel: #151b23; /* canvas.subtle: boxes, headers */
+  --color-panel-2: #0d1117; /* input backgrounds */
+  --color-raised: #212830; /* button.default.bg */
+  --color-raised-hover: #262c36;
+
+  /* Borders */
+  --color-line: #3d444d; /* border.default */
+  --color-line-soft: #2a313c; /* border.muted */
+
+  /* Text */
+  --color-ink: #f0f6fc; /* fg.default */
+  --color-dim: #9198a1; /* fg.muted */
+  --color-faint: #656c76; /* fg.subtle */
+
+  /* Accents. GitHub green is the primary action colour */
+  --color-brand: #238636; /* success.emphasis (primary button) */
+  --color-brand-soft: #2ea043; /* primary button hover */
+  --color-accent: #4493f8; /* accent.fg: links */
+  --color-accent-emph: #1f6feb;
+  --color-cyan: #4493f8;
+  --color-lime: #3fb950; /* success.fg */
+  --color-amber: #d29922; /* attention.fg */
+  --color-rose: #f85149; /* danger.fg */
+  --color-done: #ab7df8; /* done.fg: purple */
+
+  /* GitHub uses tight 6px corners, not pill-shaped cards */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+/*
+ * These element-level resets must live in `@layer base`. Unlayered CSS beats
+ * anything inside a layer no matter the specificity, so an unlayered
+ * `textarea { font-family: ... }` would silently override Tailwind's
+ * `.font-mono` utility (which sits in `@layer utilities`) on every input in
+ * the app. Same trap applies to the universal `min-width` rule versus
+ * `min-w-*`.
+ */
+@layer base {
+  * {
+    min-width: 0;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(56, 139, 253, 0.4);
+  }
+}
+
+/* GitHub's focus ring */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+  background-clip: content-box;
+}
+
+/*
+ * No `textarea, input, select { font-family: inherit }` here: Tailwind's
+ * preflight already applies `font: inherit` to form controls, and repeating it
+ * unlayered would outrank every `font-mono` utility in the app.
+ */
+
+/* ---------------------------------------------------------------------------
+   Motion
+--------------------------------------------------------------------------- */
+
+@keyframes gh-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gh-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gh-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gh-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes gh-sheen {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes gh-cell-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes gh-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(35, 134, 54, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(35, 134, 54, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(35, 134, 54, 0);
+  }
+}
+
+@keyframes gh-dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes gh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gh-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scroll-reveal. The `in` class is added by the Reveal component */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.55s cubic-bezier(0.2, 0.7, 0.3, 1),
+    transform 0.55s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Card hover lift */
+.lift {
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-faint);
+  box-shadow: 0 8px 24px rgba(1, 4, 9, 0.55);
+}
+
+.press {
+  transition: transform 0.1s ease;
+}
+.press:active {
+  transform: translateY(1px);
+}
+
+/* Diagonal light sweep on hover */
+.sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+}
+.sheen:hover::after {
+  animation: gh-sheen 0.85s ease;
+}
+
+/* Blinking terminal caret */
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  background: currentColor;
+  vertical-align: -0.18em;
+  margin-left: 1px;
+  animation: gh-blink 1.05s steps(1) infinite;
+}
+
+.spin {
+  animation: gh-spin 0.8s linear infinite;
+}
+
+.pulse-ring {
+  animation: gh-pulse-ring 2s ease-out infinite;
+}
+
+.pop-in {
+  animation: gh-pop 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.fade-in {
+  animation: gh-fade 0.3s ease both;
+}
+
+.slide-in {
+  animation: gh-slide-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Staggered entrance for lists: set --i on each child */
+.stagger > * {
+  animation: gh-fade-up 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+/* Animated underline for GitHub-style nav tabs */
+.tabline {
+  position: relative;
+}
+/*
+ * `bottom: 0`, not -1px. The tab strip is a scroll container (see SectionNav),
+ * so a child hanging one pixel below the content box makes it vertically
+ * scrollable and Chrome paints a stray scrollbar thumb next to the tabs.
+ */
+.tabline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: #fd8c73; /* GitHub's selected-tab orange */
+  transform: scaleX(0);
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transform-origin: center;
+}
+.tabline[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+/* ---- Brand lockup: pilcrow mark + animated wordmark ---- */
+
+.brand-mark {
+  display: inline-flex;
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.brand:hover .brand-mark {
+  transform: rotate(-10deg) scale(1.08);
+}
+
+.wordmark {
+  display: inline-flex;
+}
+
+/*
+ * `backwards` rather than `both`: the entrance keyframes must stop applying
+ * once finished, otherwise their final transform would outrank the hover
+ * transform below and the wave would never fire.
+ */
+.wm-ch {
+  display: inline-block;
+  white-space: pre;
+  animation: wm-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
+  animation-delay: calc(var(--i) * 45ms + 120ms);
+  transition:
+    transform 0.38s cubic-bezier(0.2, 0.7, 0.3, 1),
+    color 0.38s ease;
+}
+
+@keyframes wm-in {
+  from {
+    opacity: 0;
+    transform: translateY(9px) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Staggered lift on hover, a transition so it reverses cleanly on mouse-out */
+.brand:hover .wm-ch {
+  transform: translateY(-4px);
+  color: var(--color-lime);
+  transition-delay: calc(var(--i) * 55ms);
+}
+
+/* ---- Nav links: background pill plus an underline that grows from centre ---- */
+
+.navlink {
+  position: relative;
+  border-radius: 6px;
+  padding: 6px 10px;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
+}
+.navlink::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 2px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-lime);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.26s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.navlink:hover {
+  color: var(--color-ink);
+  background: var(--color-raised);
+}
+.navlink:hover::after {
+  transform: scaleX(1);
+}
+
+/* ---- Buttons: lift on hover, settle on press ---- */
+
+.btn-lift {
+  transition:
+    transform 0.16s cubic-bezier(0.2, 0.7, 0.3, 1),
+    box-shadow 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+.btn-lift:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn-lift:active:not(:disabled) {
+  transform: translateY(0);
+  transition-duration: 0.05s;
+}
+.btn-glow:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(35, 134, 54, 0.4);
+}
+.btn-shadow:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(1, 4, 9, 0.5);
+}
+
+/* ---- Builder chrome ---- */
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast-in {
+  animation: toast-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.shimmer-bar {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(63, 185, 80, 0.35),
+    transparent
+  );
+  animation: shimmer-sweep 1.15s linear infinite;
+}
+
+/* Drag handle between the editor and the preview */
+.splitter {
+  position: relative;
+  width: 5px;
+  cursor: col-resize;
+  background: var(--color-line);
+  transition: background-color 0.16s ease;
+  flex: none;
+  /* Let the handle own touch gestures instead of the page scrolling under it */
+  touch-action: none;
+}
+/*
+ * A 5px target is far too small for a fingertip, so the grab area is widened
+ * invisibly to ~17px while the visible line stays hairline-thin.
+ */
+.splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0 -6px;
+}
+.splitter:focus-visible {
+  background: var(--color-accent);
+  outline: none;
+}
+.splitter:focus-visible::after {
+  opacity: 0.9;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--color-faint);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.16s ease;
+}
+.splitter:hover,
+.splitter[data-dragging="true"] {
+  background: var(--color-lime);
+}
+.splitter:hover::after {
+  opacity: 0.7;
+}
+/* While dragging, stop the panes stealing the pointer or selecting text */
+.resizing,
+.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Rail tooltip that slides out on hover */
+.rail-tip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 30;
+  white-space: nowrap;
+  border-radius: 6px;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--color-ink);
+  opacity: 0;
+  transform: translateY(-50%) translateX(-4px);
+  pointer-events: none;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.rail-item:hover .rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Keyboard hint */
+.kbd {
+  border: 1px solid var(--color-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--color-raised);
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-dim);
+}
+
+/* Link underline that grows from the left */
+.ulink {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 0.25s ease;
+}
+.ulink:hover {
+  background-size: 100% 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   GitHub-accurate markdown preview
+   Scoped under .gh so these variables never collide with the app shell.
+--------------------------------------------------------------------------- */
+
+.gh {
+  --gh-fg: #1f2328;
+  --gh-muted: #59636e;
+  --gh-border: #d1d9e0;
+  --gh-bg: #ffffff;
+  --gh-subtle: #f6f8fa;
+  --gh-link: #0969da;
+  --gh-code-bg: rgba(129, 139, 152, 0.12);
+
+  background: var(--gh-bg);
+  color: var(--gh-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
+}
+
+.gh[data-theme="dark"] {
+  --gh-fg: #f0f6fc;
+  --gh-muted: #9198a1;
+  --gh-border: #3d444d;
+  --gh-bg: #0d1117;
+  --gh-subtle: #151b23;
+  --gh-link: #4493f8;
+  --gh-code-bg: rgba(101, 108, 118, 0.2);
+}
+
+.gh > *:first-child {
+  margin-top: 0 !important;
+}
+.gh > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+.gh h1,
+.gh h2,
+.gh h3,
+.gh h4,
+.gh h5,
+.gh h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.gh h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--gh-border);
+}
+.gh h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--gh-border);
+}
+.gh h3 {
+  font-size: 1.25em;
+}
+.gh h4 {
+  font-size: 1em;
+}
+.gh h5 {
+  font-size: 0.875em;
+}
+.gh h6 {
+  font-size: 0.85em;
+  color: var(--gh-muted);
+}
+
+.gh p,
+.gh blockquote,
+.gh ul,
+.gh ol,
+.gh dl,
+.gh table,
+.gh pre,
+.gh details {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.gh a {
+  color: var(--gh-link);
+  text-decoration: none;
+}
+.gh a:hover {
+  text-decoration: underline;
+}
+
+.gh strong {
+  font-weight: 600;
+}
+
+.gh ul,
+.gh ol {
+  padding-left: 2em;
+}
+.gh ul {
+  list-style: disc;
+}
+.gh ol {
+  list-style: decimal;
+}
+.gh li + li {
+  margin-top: 0.25em;
+}
+.gh li > ul,
+.gh li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0;
+}
+.gh li input[type="checkbox"] {
+  margin-right: 0.4em;
+}
+
+.gh blockquote {
+  padding: 0 1em;
+  color: var(--gh-muted);
+  border-left: 0.25em solid var(--gh-border);
+}
+
+.gh code {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  white-space: break-spaces;
+  background-color: var(--gh-code-bg);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.gh pre {
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  background-color: var(--gh-subtle);
+  border-radius: 6px;
+  border: 1px solid var(--gh-border);
+}
+.gh pre code {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: 100%;
+  white-space: pre;
+}
+
+.gh table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+}
+.gh table th,
+.gh table td {
+  padding: 6px 13px;
+  border: 1px solid var(--gh-border);
+}
+.gh table th {
+  font-weight: 600;
+  background: var(--gh-subtle);
+}
+.gh table tr:nth-child(2n) {
+  background: var(--gh-subtle);
+}
+
+.gh img {
+  max-width: 100%;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.gh hr {
+  height: 0.25em;
+  padding: 0;
+  margin: 24px 0;
+  background-color: var(--gh-border);
+  border: 0;
+}
+
+.gh details {
+  border: 1px solid transparent;
+}
+.gh summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.gh div[align="center"],
+.gh p[align="center"],
+.gh h1[align="center"],
+.gh h3[align="center"] {
+  text-align: center;
+}
+.gh p[align="left"] {
+  text-align: left;
+}
+
+.gh sub,
+.gh sup {
+  font-size: 0.8em;
+  color: var(--gh-muted);
+}

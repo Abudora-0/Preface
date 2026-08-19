@@ -1,0 +1,7 @@
+# Normalise line endings so diffs stay clean across Windows, macOS and Linux.
+* text=auto eol=lf
+
+# Binary and generated files git should not try to diff or convert.
+*.png binary
+*.ico binary
+package-lock.json linguist-generated=true -diff
