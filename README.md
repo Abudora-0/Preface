@@ -7,6 +7,7 @@
 <p><i>Dump your project in, get a well organised README out.</i></p>
 
 <p>
+  <img src="https://img.shields.io/github/actions/workflow/status/Abudora-0/Preface/ci.yml?style=for-the-badge&label=CI&labelColor=161b23" alt="CI status" />
   <img src="https://img.shields.io/badge/license-MIT-3fb950?style=for-the-badge" alt="MIT license" />
   <img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
