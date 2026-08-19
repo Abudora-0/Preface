@@ -13,6 +13,8 @@ import {
   LayoutTemplate,
   Loader2,
   Moon,
+  PanelLeft,
+  PanelLeftClose,
   PenLine,
   RotateCcw,
   SlidersHorizontal,
@@ -97,6 +99,9 @@ export default function BuilderPage() {
   const [splitPct, setSplitPct] = useState(50);
   const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  /** Below lg the panel docks as an overlay instead of taking layout width. */
+  const [narrow, setNarrow] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const [dump, setDump] = useState("");
   const [busy, setBusy] = useState(false);
@@ -167,6 +172,29 @@ export default function BuilderPage() {
     hydrated.current = true;
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  /*
+   * Watching a media query is an external-system sync. It runs in an effect
+   * rather than during render because matchMedia does not exist on the server,
+   * and reading width during render would produce a hydration mismatch.
+   */
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Escape closes the overlay panel.
+  useEffect(() => {
+    if (!narrow || !panelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [narrow, panelOpen]);
 
   // Probe which optional integrations are usable right now.
   useEffect(() => {
@@ -382,13 +410,29 @@ export default function BuilderPage() {
     return { lines: lineCount, words, bytes: new Blob([markdown]).size };
   }, [markdown, lineCount]);
 
-  const showEditor = view !== "preview";
-  const showPreview = view !== "editor";
+  /*
+   * Two panes side by side stop being useful long before the viewport runs
+   * out: at 768px each one is about 160px wide. Below lg the split collapses
+   * to whichever single pane the user last cared about.
+   */
+  const effectiveView: ViewMode = narrow && view === "split" ? "editor" : view;
+  const showEditor = effectiveView !== "preview";
+  const showPreview = effectiveView !== "editor";
+  const showSplitter = effectiveView === "split";
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       {/* Repo-style header */}
       <header className="flex h-13 shrink-0 items-center gap-3 border-b border-line bg-inset px-4 py-2.5">
+        <button
+          onClick={() => setPanelOpen((o) => !o)}
+          aria-label={panelOpen ? "Close the editing panel" : "Open the editing panel"}
+          aria-expanded={panelOpen}
+          className="focus-ring btn-lift rounded-md border border-line bg-raised p-1.5 text-dim hover:border-faint hover:text-ink lg:hidden"
+        >
+          {panelOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+        </button>
+
         <Link href="/" className="brand flex items-center gap-2 text-ink" title="Back to home">
           <span className="brand-mark">
             <PrefaceMark size={28} />
@@ -408,14 +452,14 @@ export default function BuilderPage() {
         </span>
 
         <div className="ml-auto flex items-center gap-0.5 rounded-md border border-line bg-panel p-0.5">
-          {VIEWS.map((v) => (
+          {VIEWS.filter((v) => !(narrow && v.id === "split")).map((v) => (
             <button
               key={v.id}
               onClick={() => setView(v.id)}
               title={`${v.label} (Ctrl+${v.key})`}
               className={cx(
                 "focus-ring btn-lift flex items-center gap-1.5 rounded-[4px] px-2.5 py-1 text-xs font-medium",
-                view === v.id ? "bg-raised text-ink shadow-sm" : "text-dim hover:text-ink",
+                effectiveView === v.id ? "bg-raised text-ink shadow-sm" : "text-dim hover:text-ink",
               )}
             >
               <v.icon size={13} />
@@ -469,7 +513,31 @@ export default function BuilderPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        {/* Dimmer behind the overlay panel, tap to dismiss */}
+        {narrow && panelOpen ? (
+          <div
+            className="fade-in absolute inset-0 z-30 bg-black/60"
+            onClick={() => setPanelOpen(false)}
+            aria-hidden
+          />
+        ) : null}
+
+        {/*
+          Rail and panel travel together. Above lg they sit in the layout as
+          before; below it they become an overlay so the editor keeps the full
+          width instead of being squeezed to nothing.
+        */}
+        <div
+          className={cx(
+            "z-40 flex",
+            narrow
+              ? "absolute inset-y-0 left-0 shadow-2xl shadow-black/60 transition-transform duration-200 ease-out"
+              : "static",
+            narrow && !panelOpen && "-translate-x-full",
+          )}
+          {...(narrow && !panelOpen ? { inert: "" as unknown as boolean } : {})}
+        >
         {/* Tab rail */}
         <nav className="flex w-[4.25rem] shrink-0 flex-col items-stretch gap-0.5 border-r border-line bg-inset px-1.5 py-2">
           {TABS.map((t) => {
@@ -499,7 +567,7 @@ export default function BuilderPage() {
         </nav>
 
         {/* Control panel */}
-        <aside className="w-[23rem] shrink-0 overflow-y-auto border-r border-line bg-bg">
+        <aside className="w-[23rem] max-w-[calc(100vw-4.25rem)] shrink-0 overflow-y-auto border-r border-line bg-bg">
           <div className="sticky top-0 z-10 border-b border-line bg-panel">
             <div className="flex items-center gap-2 px-3 py-2">
               <span className="text-xs font-semibold text-ink">
@@ -548,11 +616,17 @@ export default function BuilderPage() {
         </aside>
 
         {/* Editor and preview */}
+        </div>
+
         <div ref={mainRef} className="flex min-w-0 flex-1">
           {showEditor ? (
             <section
               className="flex min-w-0 flex-col"
-              style={view === "split" ? { width: `${splitPct}%`, flex: "none" } : { flex: "1 1 0%" }}
+              style={
+                effectiveView === "split"
+                  ? { width: `${splitPct}%`, flex: "none" }
+                  : { flex: "1 1 0%" }
+              }
             >
               <div className="flex h-9 shrink-0 items-center gap-3 border-b border-line bg-panel px-3 text-[11px]">
                 <span className="font-mono text-ink">README.md</span>
@@ -621,7 +695,7 @@ export default function BuilderPage() {
             </section>
           ) : null}
 
-          {view === "split" ? (
+          {showSplitter ? (
             <div
               role="separator"
               aria-orientation="vertical"
@@ -665,7 +739,7 @@ export default function BuilderPage() {
       </div>
 
       {/* Shortcut hints */}
-      <div className="flex h-7 shrink-0 items-center gap-4 border-t border-line bg-inset px-4 text-[10px] text-faint">
+      <div className="hidden h-7 shrink-0 items-center gap-4 border-t border-line bg-inset px-4 text-[10px] text-faint lg:flex">
         <span className="flex items-center gap-1.5">
           <span className="kbd">Ctrl</span>
           <span className="kbd">S</span>
