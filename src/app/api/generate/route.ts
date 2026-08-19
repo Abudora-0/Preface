@@ -2,6 +2,7 @@ import { analyzeDump } from "@/lib/analyze";
 import {
   AiError,
   OLLAMA_MODEL,
+  progressFromPartial,
   SPEC_SCHEMA,
   SYSTEM,
   buildUserMessage,
@@ -52,14 +53,32 @@ async function callAnthropic(system: string, user: string): Promise<string> {
       throw new AiError("ANTHROPIC_API_KEY was rejected.", 401);
     }
     if (err instanceof Anthropic.RateLimitError) {
-      throw new AiError("Rate limited by the Claude API. Wait a moment and retry.", 429);
+      throw new AiError(
+        "Rate limited by the Claude API. Wait a moment and retry.",
+        429,
+      );
     }
     if (err instanceof Anthropic.APIError) {
-      throw new AiError(`Claude API error (${err.status ?? "unknown"}): ${err.message}`, 502);
+      throw new AiError(
+        `Claude API error (${err.status ?? "unknown"}): ${err.message}`,
+        502,
+      );
     }
     throw new AiError("Generation failed unexpectedly.", 500);
   }
 }
+
+type Event =
+  | { type: "phase"; label: string }
+  | {
+      type: "progress";
+      done: number;
+      total: number;
+      field: string;
+      chars: number;
+    }
+  | { type: "done"; spec: unknown; notes: string[]; provider: string }
+  | { type: "error"; error: string };
 
 export async function POST(req: Request) {
   let body: { dump?: string; hint?: string };
@@ -80,22 +99,85 @@ export async function POST(req: Request) {
   const { spec: base, notes } = analyzeDump(dump);
   const user = buildUserMessage(base, clipDump(dump, provider), body.hint);
 
-  try {
-    const raw =
-      provider === "ollama" ? await callOllama(SYSTEM, user) : await callAnthropic(SYSTEM, user);
+  /*
+   * A small local model takes over a minute, so the response is streamed as
+   * NDJSON progress events rather than one silent wait. The status line is
+   * committed the moment streaming starts, so a failure after that point has
+   * to be reported in band as an error event rather than an HTTP status.
+   */
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: Event) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
 
-    const merged = mergeSpec(base, extractJson(raw));
-    return Response.json({
-      spec: merged,
-      provider,
-      notes: [
-        ...notes,
-        provider === "ollama" ? `Enhanced with ${OLLAMA_MODEL}` : "Enhanced with Claude",
-      ],
-    });
-  } catch (err) {
-    if (err instanceof AiError) return bad(err.message, err.status);
-    console.error("generate route failed", err);
-    return bad("Generation failed unexpectedly.", 500);
-  }
+      try {
+        /*
+         * Nothing streams until the model is loaded and the prompt evaluated,
+         * which was measured at around 30 seconds for a 1.5B model on a cold
+         * start. Naming that wait beats a bar sitting at zero unexplained.
+         */
+        send({
+          type: "phase",
+          label:
+            provider === "ollama"
+              ? `Loading ${OLLAMA_MODEL} and reading the dump`
+              : "Sending the dump to Claude",
+        });
+
+        let raw: string;
+        if (provider === "ollama") {
+          let lastDone = -1;
+          let lastSent = 0;
+
+          raw = await callOllama(SYSTEM, user, (partial) => {
+            const now = Date.now();
+            const p = progressFromPartial(partial);
+            // Emit on real movement, or occasionally so a long field still ticks.
+            if (p.done !== lastDone || now - lastSent > 500) {
+              lastDone = p.done;
+              lastSent = now;
+              send({ type: "progress", ...p, chars: partial.length });
+            }
+          });
+        } else {
+          raw = await callAnthropic(SYSTEM, user);
+        }
+
+        send({ type: "phase", label: "Merging with the parsed facts" });
+
+        const merged = mergeSpec(base, extractJson(raw));
+        send({
+          type: "done",
+          spec: merged,
+          provider,
+          notes: [
+            ...notes,
+            provider === "ollama"
+              ? `Enhanced with ${OLLAMA_MODEL}`
+              : "Enhanced with Claude",
+          ],
+        });
+      } catch (err) {
+        if (err instanceof AiError) {
+          send({ type: "error", error: err.message });
+        } else {
+          console.error("generate route failed", err);
+          send({ type: "error", error: "Generation failed unexpectedly." });
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      // Streaming is pointless if a proxy buffers the whole body first.
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

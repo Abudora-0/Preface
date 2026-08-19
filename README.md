@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-100_passing-3fb950?style=for-the-badge" alt="100 tests passing" />
+  <img src="https://img.shields.io/badge/tests-108_passing-3fb950?style=for-the-badge" alt="108 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
@@ -69,7 +69,7 @@ dependencies.
 | **Badge builder** | Around eighty shields.io badges across languages, frameworks, databases and infrastructure, in four styles |
 | **Eight templates** | The same structured data rendered eight ways, switchable without losing content |
 | **Split editing** | Resizable panes driven by mouse, touch, pen or keyboard, with scroll sync and line numbers |
-| **Optional AI pass** | Local Ollama by default, Claude behind an explicit opt-in |
+| **Optional AI pass** | Local Ollama by default, Claude behind an explicit opt-in, with live progress |
 
 ## Getting Started
 
@@ -219,6 +219,12 @@ silently beats Tailwind's `font-mono` utility.
 **The line-number gutter draws one row per logical line**, so it is only correct
 while soft wrap is off. Toggling wrap on hides the gutter rather than showing
 numbers that drift.
+
+**Generation progress is read off the output, not off a timer.** Schema
+constrained decoding emits the top level keys in the order they are declared,
+so the bar advances when a key has actually been written and cannot run ahead
+of the model. Because the response streams, a failure arrives as an error event
+in the body rather than an HTTP status, which is already committed by then.
 
 **A failing panel does not take the workspace down.** Each region of the
 builder sits behind its own boundary, so a panel that cannot render is replaced

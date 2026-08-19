@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   BADGE_CATALOG,
   BADGE_CATEGORIES,
@@ -8,6 +9,7 @@ import {
   repoBadges,
 } from "@/lib/badges";
 import { TEMPLATES } from "@/lib/templates";
+import type { GenState } from "@/app/builder/page";
 import { ALL_SECTIONS, type ProjectSpec, type TemplateId } from "@/lib/types";
 import {
   Button,
@@ -21,7 +23,13 @@ import {
   cx,
 } from "./ui";
 
-const REPO_BADGE_IDS = ["stars", "issues", "lastcommit", "license-dyn", "license-static"];
+const REPO_BADGE_IDS = [
+  "stars",
+  "issues",
+  "lastcommit",
+  "license-dyn",
+  "license-static",
+];
 
 type PanelProps = {
   spec: ProjectSpec;
@@ -99,14 +107,69 @@ export function ImportPanel({
       <Callout>
         Import pulls the description, license, language mix, topics and any root
         manifest (<code>package.json</code>, <code>requirements.txt</code>,{" "}
-        <code>Cargo.toml</code>, <code>go.mod</code>, <code>.env.example</code>) and
-        fills the form from them.
+        <code>Cargo.toml</code>, <code>go.mod</code>, <code>.env.example</code>)
+        and fills the form from them.
       </Callout>
     </div>
   );
 }
 
 // ------------------------------------------------------------------ Dump ---
+
+/**
+ * Live progress for the generation pass.
+ *
+ * The bar tracks how many schema fields the model has actually written, so it
+ * only moves when real work lands. The elapsed clock runs separately, because
+ * a long field means no field events for a while and a completely frozen
+ * panel reads as a hang.
+ */
+function GenerationProgress({ progress }: { progress: GenState }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const tick = () =>
+      setElapsed(Math.floor((Date.now() - progress.startedAt) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [progress.startedAt]);
+
+  const pct =
+    progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+
+  return (
+    <div
+      className="rounded-md border border-line bg-panel p-3"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="mb-2 flex items-center gap-2 text-[12px]">
+        <Loader2 size={13} className="spin text-brand" />
+        <span className="text-ink">
+          {progress.isPhase ? progress.field : `Writing ${progress.field}`}
+        </span>
+        <span className="ml-auto font-mono text-[11px] text-faint tabular-nums">
+          {clock}
+        </span>
+      </div>
+
+      <div className="h-1 w-full overflow-hidden rounded-full bg-inset">
+        <div
+          className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
+          style={{ width: `${Math.max(pct, 2)}%` }}
+        />
+      </div>
+
+      <p className="mt-2 text-[11px] text-faint">
+        {progress.total > 0
+          ? `${progress.done} of ${progress.total} fields written.`
+          : "A small local model takes a minute or two to load and start writing."}
+      </p>
+    </div>
+  );
+}
 
 export function DumpPanel({
   dump,
@@ -117,6 +180,7 @@ export function DumpPanel({
   aiLabel,
   aiHint,
   busy,
+  progress,
   notes,
   error,
 }: {
@@ -128,6 +192,7 @@ export function DumpPanel({
   aiLabel: string;
   aiHint: string | null;
   busy: boolean;
+  progress: GenState | null;
   notes: string[];
   error: string | null;
 }) {
@@ -149,7 +214,8 @@ export function DumpPanel({
         // unreadable file, skip it
       }
     }
-    if (parts.length) onDumpChange([dump, ...parts].filter(Boolean).join("\n\n"));
+    if (parts.length)
+      onDumpChange([dump, ...parts].filter(Boolean).join("\n\n"));
   }
 
   return (
@@ -166,16 +232,16 @@ export function DumpPanel({
           dropping && "ring-2 ring-brand ring-offset-2 ring-offset-[#0d1117]",
         )}
       >
-      <Field
-        label="Project content"
-        hint="Dump anything, or drag files straight in: package.json, a file tree, source files, rough notes."
-      >
-        <TextArea
-          value={dump}
-          onChange={onDumpChange}
-          rows={16}
-          mono
-          placeholder={`Paste or drop your package.json, file tree, source files, or notes here…
+        <Field
+          label="Project content"
+          hint="Dump anything, or drag files straight in: package.json, a file tree, source files, rough notes."
+        >
+          <TextArea
+            value={dump}
+            onChange={onDumpChange}
+            rows={16}
+            mono
+            placeholder={`Paste or drop your package.json, file tree, source files, or notes here…
 
 {
   "name": "my-api",
@@ -185,14 +251,16 @@ export function DumpPanel({
 src/
 ├── index.ts
 └── routes/users.ts`}
-        />
-      </Field>
+          />
+        </Field>
       </div>
 
       <div className="flex items-center justify-between text-xs text-faint">
         <span>
           {chars.toLocaleString()} characters
-          {dropping ? <span className="ml-2 text-lime">release to add files</span> : null}
+          {dropping ? (
+            <span className="ml-2 text-lime">release to add files</span>
+          ) : null}
         </span>
         {chars > 0 ? (
           <button className="hover:text-ink" onClick={() => onDumpChange("")}>
@@ -209,11 +277,17 @@ src/
           variant="primary"
           onClick={onGenerate}
           disabled={busy || chars < 20 || aiAvailable === false}
-          title={aiAvailable === false ? (aiHint ?? "AI generation is unavailable") : undefined}
+          title={
+            aiAvailable === false
+              ? (aiHint ?? "AI generation is unavailable")
+              : undefined
+          }
         >
           {busy ? "Generating…" : `Generate with ${aiLabel}`}
         </Button>
       </div>
+
+      {progress ? <GenerationProgress progress={progress} /> : null}
 
       {error ? <Callout tone="error">{error}</Callout> : null}
       {notes.length ? (
@@ -230,14 +304,14 @@ src/
         <Callout tone="warn">
           {aiHint}
           <br />
-          <strong>Analyze locally</strong> still works. It parses manifests, detects your
-          stack, and fills the form with no model at all.
+          <strong>Analyze locally</strong> still works. It parses manifests,
+          detects your stack, and fills the form with no model at all.
         </Callout>
       ) : (
         <Callout>
           <strong>Analyze locally</strong> is instant and offline.{" "}
-          <strong>Generate with {aiLabel}</strong> runs the same analysis first, then
-          writes the prose on top of it.
+          <strong>Generate with {aiLabel}</strong> runs the same analysis first,
+          then writes the prose on top of it.
         </Callout>
       )}
     </div>
@@ -254,9 +328,16 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
     <div className="space-y-5">
       <SectionLabel>Identity</SectionLabel>
       <Field label="Project name">
-        <TextInput value={spec.name} onChange={(v) => set("name", v)} placeholder="Preface" />
+        <TextInput
+          value={spec.name}
+          onChange={(v) => set("name", v)}
+          placeholder="Preface"
+        />
       </Field>
-      <Field label="Tagline" hint="One sentence shown directly under the title.">
+      <Field
+        label="Tagline"
+        hint="One sentence shown directly under the title."
+      >
         <TextInput
           value={spec.tagline}
           onChange={(v) => set("tagline", v)}
@@ -274,29 +355,51 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
 
       <SectionLabel>Links</SectionLabel>
       <Field label="Repository URL">
-        <TextInput value={spec.repoUrl ?? ""} onChange={(v) => set("repoUrl", v)} mono />
+        <TextInput
+          value={spec.repoUrl ?? ""}
+          onChange={(v) => set("repoUrl", v)}
+          mono
+        />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Demo URL">
-          <TextInput value={spec.demoUrl ?? ""} onChange={(v) => set("demoUrl", v)} mono />
+          <TextInput
+            value={spec.demoUrl ?? ""}
+            onChange={(v) => set("demoUrl", v)}
+            mono
+          />
         </Field>
         <Field label="Docs URL">
-          <TextInput value={spec.docsUrl ?? ""} onChange={(v) => set("docsUrl", v)} mono />
+          <TextInput
+            value={spec.docsUrl ?? ""}
+            onChange={(v) => set("docsUrl", v)}
+            mono
+          />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Author">
-          <TextInput value={spec.author ?? ""} onChange={(v) => set("author", v)} />
+          <TextInput
+            value={spec.author ?? ""}
+            onChange={(v) => set("author", v)}
+          />
         </Field>
         <Field label="License">
-          <TextInput value={spec.license ?? ""} onChange={(v) => set("license", v)} placeholder="MIT" />
+          <TextInput
+            value={spec.license ?? ""}
+            onChange={(v) => set("license", v)}
+            placeholder="MIT"
+          />
         </Field>
       </div>
 
       <SectionLabel>Features</SectionLabel>
       <div className="space-y-2">
         {spec.features.map((f, i) => (
-          <div key={i} className="rounded-lg border border-line bg-panel-2 p-2.5">
+          <div
+            key={i}
+            className="rounded-lg border border-line bg-panel-2 p-2.5"
+          >
             <div className="mb-1.5 flex gap-1.5">
               <input
                 value={f.title}
@@ -311,7 +414,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => set("features", spec.features.filter((_, j) => j !== i))}
+                onClick={() =>
+                  set(
+                    "features",
+                    spec.features.filter((_, j) => j !== i),
+                  )
+                }
               >
                 ✕
               </Button>
@@ -356,7 +464,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
         />
       </Field>
       <Field label="Run command">
-        <TextInput value={spec.runCmd ?? ""} onChange={(v) => set("runCmd", v)} mono placeholder="npm run dev" />
+        <TextInput
+          value={spec.runCmd ?? ""}
+          onChange={(v) => set("runCmd", v)}
+          mono
+          placeholder="npm run dev"
+        />
       </Field>
 
       <SectionLabel>Usage</SectionLabel>
@@ -407,7 +520,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => set("scripts", spec.scripts.filter((_, j) => j !== i))}
+              onClick={() =>
+                set(
+                  "scripts",
+                  spec.scripts.filter((_, j) => j !== i),
+                )
+              }
             >
               ✕
             </Button>
@@ -416,7 +534,9 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => set("scripts", [...spec.scripts, { name: "", cmd: "" }])}
+          onClick={() =>
+            set("scripts", [...spec.scripts, { name: "", cmd: "" }])
+          }
         >
           + Add script
         </Button>
@@ -449,13 +569,22 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => set("env", spec.env.filter((_, j) => j !== i))}
+              onClick={() =>
+                set(
+                  "env",
+                  spec.env.filter((_, j) => j !== i),
+                )
+              }
             >
               ✕
             </Button>
           </div>
         ))}
-        <Button size="sm" variant="ghost" onClick={() => set("env", [...spec.env, { key: "" }])}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => set("env", [...spec.env, { key: "" }])}
+        >
           + Add variable
         </Button>
       </div>
@@ -466,7 +595,10 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
           <SectionLabel>Workspace packages</SectionLabel>
           <div className="space-y-1.5">
             {spec.packages.map((pkgEntry, i) => (
-              <div key={i} className="slide-in rounded-md border border-line bg-panel p-2">
+              <div
+                key={i}
+                className="slide-in rounded-md border border-line bg-panel p-2"
+              >
                 <div className="mb-1.5 flex gap-1.5">
                   <input
                     value={pkgEntry.name}
@@ -491,7 +623,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => set("packages", spec.packages.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      set(
+                        "packages",
+                        spec.packages.filter((_, j) => j !== i),
+                      )
+                    }
                   >
                     X
                   </Button>
@@ -524,12 +661,17 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
         out of the way unless it is selected or the analyzer already found an
         action.yml.
       */}
-      {spec.template === "action" || spec.inputs.length > 0 || spec.outputs.length > 0 ? (
+      {spec.template === "action" ||
+      spec.inputs.length > 0 ||
+      spec.outputs.length > 0 ? (
         <>
           <SectionLabel>Action inputs</SectionLabel>
           <div className="space-y-1.5">
             {spec.inputs.map((inp, i) => (
-              <div key={i} className="slide-in rounded-md border border-line bg-panel p-2">
+              <div
+                key={i}
+                className="slide-in rounded-md border border-line bg-panel p-2"
+              >
                 <div className="mb-1.5 flex gap-1.5">
                   <input
                     value={inp.name}
@@ -544,7 +686,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => set("inputs", spec.inputs.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      set(
+                        "inputs",
+                        spec.inputs.filter((_, j) => j !== i),
+                      )
+                    }
                   >
                     ✕
                   </Button>
@@ -622,7 +769,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => set("outputs", spec.outputs.filter((_, j) => j !== i))}
+                  onClick={() =>
+                    set(
+                      "outputs",
+                      spec.outputs.filter((_, j) => j !== i),
+                    )
+                  }
                 >
                   ✕
                 </Button>
@@ -637,7 +789,10 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
             </Button>
           </div>
 
-          <Field label="Action reference" hint="The value people put after uses:">
+          <Field
+            label="Action reference"
+            hint="The value people put after uses:"
+          >
             <TextInput
               value={spec.actionRef ?? ""}
               onChange={(v) => set("actionRef", v)}
@@ -670,7 +825,10 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
       <SectionLabel>FAQ</SectionLabel>
       <div className="space-y-2">
         {spec.faq.map((f, i) => (
-          <div key={i} className="rounded-lg border border-line bg-panel-2 p-2.5">
+          <div
+            key={i}
+            className="rounded-lg border border-line bg-panel-2 p-2.5"
+          >
             <div className="mb-1.5 flex gap-1.5">
               <input
                 value={f.q}
@@ -685,7 +843,12 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => set("faq", spec.faq.filter((_, j) => j !== i))}
+                onClick={() =>
+                  set(
+                    "faq",
+                    spec.faq.filter((_, j) => j !== i),
+                  )
+                }
               >
                 ✕
               </Button>
@@ -703,7 +866,11 @@ export function DetailsPanel({ spec, onSpec }: PanelProps) {
             />
           </div>
         ))}
-        <Button size="sm" variant="ghost" onClick={() => set("faq", [...spec.faq, { q: "", a: "" }])}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => set("faq", [...spec.faq, { q: "", a: "" }])}
+        >
           + Add question
         </Button>
       </div>
@@ -717,7 +884,8 @@ export function SectionsPanel({ spec, onSpec }: PanelProps) {
   return (
     <div className="space-y-3">
       <Callout>
-        Turn sections on or off. The table of contents and anchors update automatically.
+        Turn sections on or off. The table of contents and anchors update
+        automatically.
       </Callout>
       <div className="space-y-0.5">
         {ALL_SECTIONS.map((s) => (
@@ -725,7 +893,9 @@ export function SectionsPanel({ spec, onSpec }: PanelProps) {
             key={s.key}
             label={s.label}
             checked={spec.sections[s.key]}
-            onChange={(v) => onSpec({ ...spec, sections: { ...spec.sections, [s.key]: v } })}
+            onChange={(v) =>
+              onSpec({ ...spec, sections: { ...spec.sections, [s.key]: v } })
+            }
           />
         ))}
       </div>
@@ -735,7 +905,12 @@ export function SectionsPanel({ spec, onSpec }: PanelProps) {
 
 // ---------------------------------------------------------------- Badges ---
 
-const BADGE_STYLES = ["for-the-badge", "flat", "flat-square", "plastic"] as const;
+const BADGE_STYLES = [
+  "for-the-badge",
+  "flat",
+  "flat-square",
+  "plastic",
+] as const;
 
 export function BadgesPanel({ spec, onSpec }: PanelProps) {
   const [query, setQuery] = useState("");
@@ -743,7 +918,10 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
   const [style, setStyle] = useState<string>("for-the-badge");
 
   const selectedIds = useMemo(
-    () => spec.badges.filter((b) => !REPO_BADGE_IDS.includes(b.id)).map((b) => b.id),
+    () =>
+      spec.badges
+        .filter((b) => !REPO_BADGE_IDS.includes(b.id))
+        .map((b) => b.id),
     [spec.badges],
   );
 
@@ -751,7 +929,9 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
   const hasRepoBadges = spec.badges.some((b) => REPO_BADGE_IDS.includes(b.id));
 
   function rebuild(ids: string[], nextStyle = style, withRepo = hasRepoBadges) {
-    const tech = ids.map((id) => badgeById(id, nextStyle)).filter(Boolean) as ProjectSpec["badges"];
+    const tech = ids
+      .map((id) => badgeById(id, nextStyle))
+      .filter(Boolean) as ProjectSpec["badges"];
     const repo = withRepo ? repoBadges(repoSlug, spec.license, nextStyle) : [];
     onSpec({ ...spec, badges: [...repo, ...tech] });
   }
@@ -775,7 +955,9 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
               }}
               className={cx(
                 "focus-ring press rounded-[4px] px-2 py-1 font-mono text-[11px] transition-all duration-150",
-                style === s ? "bg-raised text-ink shadow-sm" : "text-dim hover:text-ink",
+                style === s
+                  ? "bg-raised text-ink shadow-sm"
+                  : "text-dim hover:text-ink",
               )}
             >
               {s}
@@ -791,13 +973,17 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
       />
       {hasRepoBadges && !repoSlug ? (
         <Callout tone="warn">
-          Set a GitHub repository URL in <strong>Details</strong> for live star and issue
-          counts. Until then only a static license badge is emitted.
+          Set a GitHub repository URL in <strong>Details</strong> for live star
+          and issue counts. Until then only a static license badge is emitted.
         </Callout>
       ) : null}
 
       <Field label="Search technologies">
-        <TextInput value={query} onChange={setQuery} placeholder="react, postgres, docker…" />
+        <TextInput
+          value={query}
+          onChange={setQuery}
+          placeholder="react, postgres, docker…"
+        />
       </Field>
 
       <div className="flex flex-wrap gap-1">
@@ -826,7 +1012,9 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
               style={{ animationDelay: `${Math.min(i, 24) * 18}ms` }}
               onClick={() =>
                 rebuild(
-                  on ? selectedIds.filter((id) => id !== def.id) : [...selectedIds, def.id],
+                  on
+                    ? selectedIds.filter((id) => id !== def.id)
+                    : [...selectedIds, def.id],
                 )
               }
               className={cx(
@@ -850,7 +1038,9 @@ export function BadgesPanel({ spec, onSpec }: PanelProps) {
           );
         })}
         {visible.length === 0 ? (
-          <p className="text-xs text-faint">No technologies match that search.</p>
+          <p className="text-xs text-faint">
+            No technologies match that search.
+          </p>
         ) : null}
       </div>
 
@@ -905,9 +1095,13 @@ export function TemplatesPanel({ spec, onSpec }: PanelProps) {
                 />
               </span>
               <span className="text-sm font-semibold text-ink">{t.name}</span>
-              <span className="ml-auto font-mono text-[10px] text-faint">{t.id}</span>
+              <span className="ml-auto font-mono text-[10px] text-faint">
+                {t.id}
+              </span>
             </div>
-            <p className="mb-2 pl-5.5 text-xs leading-relaxed text-dim">{t.blurb}</p>
+            <p className="mb-2 pl-5.5 text-xs leading-relaxed text-dim">
+              {t.blurb}
+            </p>
             <p className="pl-5.5 text-[11px] text-faint">
               <span className="text-lime">{t.vibe}</span> · Best for {t.best}
             </p>

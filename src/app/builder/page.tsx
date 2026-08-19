@@ -88,6 +88,29 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 type ViewMode = "split" | "editor" | "preview";
 
+/** One line of the NDJSON stream from /api/generate. */
+type GenEvent =
+  | { type: "phase"; label: string }
+  | {
+      type: "progress";
+      done: number;
+      total: number;
+      field: string;
+      chars: number;
+    }
+  | { type: "done"; spec: unknown; notes: string[]; provider: string }
+  | { type: "error"; error: string };
+
+export type GenState = {
+  done: number;
+  total: number;
+  /** A schema field being written, or a phase label when `isPhase` is set. */
+  field: string;
+  /** Phase labels are whole sentences, field names are not. */
+  isPhase: boolean;
+  startedAt: number;
+};
+
 type AiStatus = {
   provider: "ollama" | "anthropic";
   ai: boolean;
@@ -136,6 +159,7 @@ export default function BuilderPage() {
   const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   /** Below lg the panel docks as an overlay instead of taking layout width. */
+  const [progress, setProgress] = useState<GenState | null>(null);
   const [narrow, setNarrow] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -323,32 +347,105 @@ export default function BuilderPage() {
     }
   }, [dump, spec.template, applySpec, notify]);
 
+  /*
+   * The endpoint streams NDJSON progress events rather than answering once at
+   * the end, because a 1.5B model takes over a minute and a static spinner for
+   * that long is indistinguishable from a hang. A failure after the headers
+   * are sent arrives as an error event, not an HTTP status.
+   */
   const runGenerate = useCallback(async () => {
     setError(null);
     setNotes([]);
     setBusy(true);
+    setProgress({
+      done: 0,
+      total: 0,
+      field: "Starting",
+      isPhase: true,
+      startedAt: Date.now(),
+    });
+
+    const fail = (message: string) => {
+      setError(message);
+      notify(message, "error");
+    };
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dump }),
       });
-      const data = await res.json();
+
       if (!res.ok) {
-        setError(data.error ?? "Generation failed.");
-        notify(data.error ?? "Generation failed", "error");
+        const data = await res.json().catch(() => ({}));
+        fail(data.error ?? "Generation failed.");
         return;
       }
-      applySpec({ ...data.spec, template: spec.template });
-      setNotes(data.notes ?? []);
-      notify(
-        `Generated with ${data.provider === "anthropic" ? "Claude" : aiLabel}`,
-      );
+      if (!res.body) {
+        fail("The server sent no response body.");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+      let finished = false;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event: GenEvent;
+          try {
+            event = JSON.parse(line) as GenEvent;
+          } catch {
+            continue; // a torn line is not worth abandoning the run for
+          }
+
+          if (event.type === "phase") {
+            setProgress((p) => (p ? { ...p, field: event.label, isPhase: true } : p));
+          } else if (event.type === "progress") {
+            setProgress((p) =>
+              p
+                ? {
+                    ...p,
+                    done: event.done,
+                    total: event.total,
+                    field: event.field,
+                    isPhase: false,
+                  }
+                : p,
+            );
+          } else if (event.type === "error") {
+            finished = true;
+            fail(event.error);
+          } else if (event.type === "done") {
+            finished = true;
+            applySpec({
+              ...(event.spec as ProjectSpec),
+              template: spec.template,
+            });
+            setNotes(event.notes ?? []);
+            notify(
+              `Generated with ${event.provider === "anthropic" ? "Claude" : aiLabel}`,
+            );
+          }
+        }
+      }
+
+      if (!finished) fail("The generation ended before it finished.");
     } catch {
-      setError("Network error while contacting the server.");
-      notify("Network error", "error");
+      fail("Network error while contacting the server.");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }, [dump, spec.template, applySpec, notify, aiLabel]);
 
@@ -683,6 +780,7 @@ export default function BuilderPage() {
                     aiLabel={aiLabel}
                     aiHint={aiHint}
                     busy={busy}
+                    progress={progress}
                     notes={notes}
                     error={error}
                   />

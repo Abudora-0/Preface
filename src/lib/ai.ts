@@ -28,7 +28,9 @@ export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "qwen2.5:1.5b";
 export function resolveProvider(
   env: Record<string, string | undefined> = process.env,
 ): AiProvider {
-  return env.AI_PROVIDER?.trim().toLowerCase() === "anthropic" ? "anthropic" : "ollama";
+  return env.AI_PROVIDER?.trim().toLowerCase() === "anthropic"
+    ? "anthropic"
+    : "ollama";
 }
 
 /** Rough parameter count from an Ollama tag such as `qwen2.5:1.5b`. */
@@ -105,7 +107,10 @@ export const SPEC_SCHEMA = {
     description: { type: "string" },
     features: {
       type: "array",
-      items: strObj({ title: { type: "string" }, desc: { type: "string" } }, ["title", "desc"]),
+      items: strObj({ title: { type: "string" }, desc: { type: "string" } }, [
+        "title",
+        "desc",
+      ]),
     },
     techStack: { type: "array", items: { type: "string" } },
     prerequisites: { type: "array", items: { type: "string" } },
@@ -116,21 +121,32 @@ export const SPEC_SCHEMA = {
     scripts: {
       type: "array",
       items: strObj(
-        { name: { type: "string" }, cmd: { type: "string" }, desc: { type: "string" } },
+        {
+          name: { type: "string" },
+          cmd: { type: "string" },
+          desc: { type: "string" },
+        },
         ["name", "cmd", "desc"],
       ),
     },
     env: {
       type: "array",
       items: strObj(
-        { key: { type: "string" }, desc: { type: "string" }, example: { type: "string" } },
+        {
+          key: { type: "string" },
+          desc: { type: "string" },
+          example: { type: "string" },
+        },
         ["key", "desc", "example"],
       ),
     },
     roadmap: { type: "array", items: { type: "string" } },
     faq: {
       type: "array",
-      items: strObj({ q: { type: "string" }, a: { type: "string" } }, ["q", "a"]),
+      items: strObj({ q: { type: "string" }, a: { type: "string" } }, [
+        "q",
+        "a",
+      ]),
     },
     license: { type: "string" },
   },
@@ -153,7 +169,11 @@ export const SPEC_SCHEMA = {
   ],
 } as const;
 
-export function buildUserMessage(base: ProjectSpec, dump: string, hint?: string): string {
+export function buildUserMessage(
+  base: ProjectSpec,
+  dump: string,
+  hint?: string,
+): string {
   return [
     "## Deterministic extraction (already parsed from the material)",
     "```json",
@@ -189,7 +209,10 @@ export class AiError extends Error {
 }
 
 /** Is the local Ollama server up, and which models does it have? */
-export async function ollamaStatus(): Promise<{ up: boolean; models: string[] }> {
+export async function ollamaStatus(): Promise<{
+  up: boolean;
+  models: string[];
+}> {
   try {
     const res = await fetch(`${OLLAMA_URL}/api/tags`, {
       signal: AbortSignal.timeout(1500),
@@ -208,7 +231,58 @@ export async function ollamaStatus(): Promise<{ up: boolean; models: string[] }>
  * valid JSON by construction. `num_ctx` has to be set explicitly: the default
  * is small enough that a real project dump would be silently truncated.
  */
-export async function callOllama(system: string, user: string): Promise<string> {
+/**
+ * The order schema-constrained decoding emits top level keys in, which is the
+ * order they are declared in SPEC_SCHEMA. Progress is read off this rather
+ * than off a timer, so the bar only moves when the model has actually
+ * finished a field.
+ */
+export const SPEC_FIELDS: { key: string; label: string }[] = [
+  { key: "name", label: "the name" },
+  { key: "tagline", label: "the tagline" },
+  { key: "description", label: "the description" },
+  { key: "features", label: "features" },
+  { key: "techStack", label: "the tech stack" },
+  { key: "prerequisites", label: "prerequisites" },
+  { key: "install", label: "install steps" },
+  { key: "runCmd", label: "the run command" },
+  { key: "usage", label: "the usage example" },
+  { key: "usageLang", label: "the usage language" },
+  { key: "scripts", label: "scripts" },
+  { key: "env", label: "environment variables" },
+  { key: "roadmap", label: "the roadmap" },
+  { key: "faq", label: "the FAQ" },
+  { key: "license", label: "the license" },
+];
+
+export type GenProgress = { done: number; total: number; field: string };
+
+/**
+ * Reads how far the model has got from the JSON it has emitted so far.
+ *
+ * A key is only counted once it has been written with its colon, so a value
+ * that happens to contain the word (`"npm install"`) cannot advance the bar.
+ */
+export function progressFromPartial(partial: string): GenProgress {
+  let done = 0;
+  let field = SPEC_FIELDS[0].label;
+
+  for (const f of SPEC_FIELDS) {
+    if (new RegExp(`"${f.key}"\\s*:`).test(partial)) {
+      done += 1;
+      field = f.label;
+    }
+  }
+
+  return { done, total: SPEC_FIELDS.length, field };
+}
+
+export async function callOllama(
+  system: string,
+  user: string,
+  /** Called with everything received so far, whenever more arrives. */
+  onPartial?: (partial: string) => void,
+): Promise<string> {
   let res: Response;
   try {
     res = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -217,7 +291,7 @@ export async function callOllama(system: string, user: string): Promise<string> 
       signal: AbortSignal.timeout(180_000),
       body: JSON.stringify({
         model: OLLAMA_MODEL,
-        stream: false,
+        stream: Boolean(onPartial),
         format: SPEC_SCHEMA,
         options: { num_ctx: 16_384, temperature: 0.2 },
         messages: [
@@ -246,13 +320,73 @@ export async function callOllama(system: string, user: string): Promise<string> 
     );
   }
   if (!res.ok) {
-    throw new AiError(`Ollama returned ${res.status}: ${(await res.text()).slice(0, 200)}`, 502);
+    throw new AiError(
+      `Ollama returned ${res.status}: ${(await res.text()).slice(0, 200)}`,
+      502,
+    );
   }
 
-  const data = (await res.json()) as { message?: { content?: string } };
-  const content = data.message?.content?.trim();
+  const content = onPartial
+    ? await readStream(res, onPartial)
+    : await readWhole(res);
   if (!content) throw new AiError("Ollama returned an empty response.", 502);
   return content;
+}
+
+async function readWhole(res: Response): Promise<string> {
+  const data = (await res.json()) as { message?: { content?: string } };
+  return data.message?.content?.trim() ?? "";
+}
+
+/**
+ * Ollama streams NDJSON, one object per line, each carrying the next slice of
+ * content. A slice can be split across reads, so the tail of a chunk is held
+ * back until its newline arrives.
+ */
+async function readStream(
+  res: Response,
+  onPartial: (partial: string) => void,
+): Promise<string> {
+  if (!res.body) throw new AiError("Ollama returned no response body.", 502);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  let content = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffered += decoder.decode(value, { stream: true });
+      const lines = buffered.split("\n");
+      buffered = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const chunk = JSON.parse(trimmed) as {
+            message?: { content?: string };
+            error?: string;
+          };
+          if (chunk.error) throw new AiError(`Ollama: ${chunk.error}`, 502);
+          if (chunk.message?.content) {
+            content += chunk.message.content;
+            onPartial(content);
+          }
+        } catch (err) {
+          if (err instanceof AiError) throw err;
+          // a malformed line is not worth abandoning a finished generation for
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return content.trim();
 }
 
 /**
@@ -260,14 +394,20 @@ export async function callOllama(system: string, user: string): Promise<string> 
  * outermost object out rather than failing the whole generation over it.
  */
 export function extractJson(text: string): Record<string, unknown> {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "");
   try {
     return JSON.parse(trimmed) as Record<string, unknown>;
   } catch {
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
     if (start !== -1 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+      return JSON.parse(trimmed.slice(start, end + 1)) as Record<
+        string,
+        unknown
+      >;
     }
     throw new AiError("The model did not return usable JSON.", 502);
   }
@@ -283,7 +423,9 @@ function str(v: unknown, fallback = ""): string {
   return typeof v === "string" && v.trim() ? v.trim() : fallback;
 }
 function strList(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && !!x.trim())
+    : [];
 }
 
 /** AI output wins on prose; deterministic output wins on anything it found. */
@@ -326,10 +468,17 @@ export function mergeSpec(base: ProjectSpec, ai: AiSpec): ProjectSpec {
         if (n && d) descByName.set(n, d);
       }
     }
-    spec.scripts = base.scripts.map((s) => ({ ...s, desc: descByName.get(s.name) ?? s.desc }));
+    spec.scripts = base.scripts.map((s) => ({
+      ...s,
+      desc: descByName.get(s.name) ?? s.desc,
+    }));
   } else if (Array.isArray(ai.scripts)) {
     spec.scripts = (ai.scripts as AiSpec[])
-      .map((s) => ({ name: str(s.name), cmd: str(s.cmd), desc: str(s.desc) || undefined }))
+      .map((s) => ({
+        name: str(s.name),
+        cmd: str(s.cmd),
+        desc: str(s.desc) || undefined,
+      }))
       .filter((s) => s.name);
   }
 
@@ -339,7 +488,10 @@ export function mergeSpec(base: ProjectSpec, ai: AiSpec): ProjectSpec {
     for (const e of ai.env as AiSpec[]) {
       const k = str(e.key);
       if (k) {
-        envDesc.set(k, { desc: str(e.desc) || undefined, example: str(e.example) || undefined });
+        envDesc.set(k, {
+          desc: str(e.desc) || undefined,
+          example: str(e.example) || undefined,
+        });
       }
     }
   }
@@ -350,13 +502,17 @@ export function mergeSpec(base: ProjectSpec, ai: AiSpec): ProjectSpec {
       ...(envDesc.get(e.key) ?? {}),
       example: e.example ?? envDesc.get(e.key)?.example,
     })),
-    ...[...envDesc.entries()].filter(([k]) => !seen.has(k)).map(([key, v]) => ({ key, ...v })),
+    ...[...envDesc.entries()]
+      .filter(([k]) => !seen.has(k))
+      .map(([key, v]) => ({ key, ...v })),
   ];
 
   spec.roadmap = strList(ai.roadmap);
 
   spec.faq = Array.isArray(ai.faq)
-    ? (ai.faq as AiSpec[]).map((f) => ({ q: str(f.q), a: str(f.a) })).filter((f) => f.q && f.a)
+    ? (ai.faq as AiSpec[])
+        .map((f) => ({ q: str(f.q), a: str(f.a) }))
+        .filter((f) => f.q && f.a)
     : [];
 
   const aiTech = strList(ai.techStack);
