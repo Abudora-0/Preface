@@ -309,7 +309,7 @@ export default function Home() {
         <Reveal>
           <div className="mb-8 flex items-end justify-between gap-4 border-b border-line pb-4">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">Five templates, one spec</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">One spec, every template</h2>
               <p className="mt-1.5 text-sm text-dim">
                 Switching template never loses content. The same structured data is re-rendered
                 with different chrome.
@@ -324,7 +324,7 @@ export default function Home() {
             <div className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5 text-xs text-dim">
               <LayoutTemplate size={14} />
               <span className="font-semibold text-ink">src/lib/templates.ts</span>
-              <span className="ml-auto hidden font-mono sm:inline">5 objects</span>
+              <span className="ml-auto hidden font-mono sm:inline">{TEMPLATES.length} objects</span>
             </div>
             <ul>
               {TEMPLATES.map((t, i) => (

@@ -536,7 +536,7 @@ export default function BuilderPage() {
               : "static",
             narrow && !panelOpen && "-translate-x-full",
           )}
-          {...(narrow && !panelOpen ? { inert: "" as unknown as boolean } : {})}
+          inert={narrow && !panelOpen}
         >
         {/* Tab rail */}
         <nav className="flex w-[4.25rem] shrink-0 flex-col items-stretch gap-0.5 border-r border-line bg-inset px-1.5 py-2">
