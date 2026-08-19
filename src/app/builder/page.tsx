@@ -37,8 +37,14 @@ import {
 import { Button, GithubIcon, Label, cx } from "@/components/ui";
 import { analyzeDump } from "@/lib/analyze";
 import { renderReadme } from "@/lib/render";
-import { TEMPLATES, templateMeta } from "@/lib/templates";
-import { emptySpec, type ProjectSpec, type TemplateId } from "@/lib/types";
+import { templateMeta } from "@/lib/templates";
+import {
+  emptySpec,
+  normalizeSpec,
+  TEMPLATE_IDS,
+  type ProjectSpec,
+  type TemplateId,
+} from "@/lib/types";
 
 const STORAGE_KEY = "preface.state.v1";
 /** Pre-rename key; read once so existing drafts survive the rebrand. */
@@ -55,8 +61,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 type ViewMode = "split" | "editor" | "preview";
-
-const TEMPLATE_IDS = TEMPLATES.map((t) => t.id);
 
 type AiStatus = {
   provider: "ollama" | "anthropic";
@@ -136,7 +140,8 @@ export default function BuilderPage() {
           manual?: boolean;
           dump?: string;
         };
-        if (saved.spec) restored = saved.spec;
+        // A draft can predate any field the panels read, so rebuild its shape.
+        if (saved.spec) restored = normalizeSpec(saved.spec);
         if (saved.manual && saved.markdown) setOverride(saved.markdown);
         if (saved.dump) setDump(saved.dump);
       }
