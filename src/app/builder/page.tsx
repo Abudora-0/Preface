@@ -246,8 +246,23 @@ export default function BuilderPage() {
     const mq = window.matchMedia("(max-width: 1023px)");
     const apply = () => setNarrow(mq.matches);
     apply();
+
+    /*
+     * Resize is a belt to the change event's braces. A missed change leaves
+     * this state disagreeing with the media query the stylesheet is using,
+     * and the failure is not cosmetic: the rail and panel slide away as an
+     * overlay while the button that reopens them is gone, so the whole left
+     * side of the workspace becomes unreachable. Re-reading on resize repairs
+     * that instead of stranding the layout until a reload.
+     */
     mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    window.addEventListener("pageshow", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("pageshow", apply);
+    };
   }, []);
 
   // Escape closes the overlay panel.
@@ -600,16 +615,24 @@ export default function BuilderPage() {
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       {/* Repo-style header */}
       <header className="flex h-13 shrink-0 items-center gap-3 border-b border-line bg-inset px-4 py-2.5">
-        <button
-          onClick={() => setPanelOpen((o) => !o)}
-          aria-label={
-            panelOpen ? "Close the editing panel" : "Open the editing panel"
-          }
-          aria-expanded={panelOpen}
-          className="focus-ring btn-lift rounded-md border border-line bg-raised p-1.5 text-dim hover:border-faint hover:text-ink lg:hidden"
-        >
-          {panelOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
-        </button>
+        {/*
+          Rendered from the same state that hides the panel, never from a CSS
+          breakpoint. A media query here could hide this button while the state
+          still had the panel off-screen, which is the one case that leaves no
+          way to bring it back.
+        */}
+        {narrow ? (
+          <button
+            onClick={() => setPanelOpen((o) => !o)}
+            aria-label={
+              panelOpen ? "Close the editing panel" : "Open the editing panel"
+            }
+            aria-expanded={panelOpen}
+            className="focus-ring btn-lift rounded-md border border-line bg-raised p-1.5 text-dim hover:border-faint hover:text-ink"
+          >
+            {panelOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+          </button>
+        ) : null}
 
         <Link
           href="/"
