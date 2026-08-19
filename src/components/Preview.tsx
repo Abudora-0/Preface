@@ -31,7 +31,15 @@ const schema = {
   ],
   attributes: {
     ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "style", "className"],
+    /*
+     * No `style`. GitHub strips inline styles from rendered READMEs, so
+     * allowing them here made the preview less accurate, not more, and
+     * hast-util-sanitize does not parse CSS values: it only decides whether
+     * the attribute survives. Allowing it on every element handed any pasted
+     * node control over position and stacking, which is enough to cover the
+     * app with an overlay. `align` covers the centering READMEs actually use.
+     */
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "className"],
     img: [
       ...(defaultSchema.attributes?.img ?? []),
       "src",

@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Runs on local Ollama" />
-  <img src="https://img.shields.io/badge/tests-118_passing-3fb950?style=for-the-badge" alt="118 tests passing" />
+  <img src="https://img.shields.io/badge/tests-127_passing-3fb950?style=for-the-badge" alt="127 tests passing" />
 </p>
 
 <p><b>No account. No API key. Nothing leaves your machine.</b></p>
@@ -235,6 +235,17 @@ src/
 ## Implementation notes
 
 A few things that are easy to get wrong and worth knowing before editing.
+
+**Values written into raw HTML are escaped, and link targets are validated.**
+Not every value in a spec belongs to the person editing it: importing a
+repository by URL pulls in that repository's description and homepage, which
+belong to whoever owns it. The templates that emit real HTML run text through
+`escHtml` and link targets through `httpUrl`, so an imported description cannot
+close the tag it sits in, and a target that is not http(s) is dropped rather
+than written out. The preview's sanitizer is the second layer, not the only
+one, and it deliberately does not allow `style`: GitHub strips inline styles
+from rendered READMEs, so permitting them made the preview less accurate while
+handing any pasted node control over position and stacking.
 
 **Markdown is not parsed inside raw HTML blocks.** Templates that wrap badges in
 a `<p>` emit real `<img>` tags rather than markdown image syntax, otherwise they

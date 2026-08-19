@@ -41,12 +41,15 @@ function badgeRow(badges: Badge[], sep = " "): string {
  * a <p>/<div> wrapper has to be emitted as a real <img> tag.
  */
 function badgeHtml(b: Badge): string {
-  const img = `<img src="${b.url}" alt="${b.label}" />`;
-  return b.href ? `<a href="${b.href}">${img}</a>` : img;
+  const src = safeUrl(b.url);
+  if (!src) return "";
+  const img = `<img src="${src}" alt="${escHtml(b.label)}" />`;
+  const href = safeUrl(b.href);
+  return href ? `<a href="${href}">${img}</a>` : img;
 }
 
 function badgeRowHtml(badges: Badge[], sep = "\n  "): string {
-  return badges.map(badgeHtml).join(sep);
+  return badges.map(badgeHtml).filter(Boolean).join(sep);
 }
 
 function repoSlug(spec: ProjectSpec): string | undefined {
@@ -68,6 +71,48 @@ function table(headers: string[], rows: string[][]): string {
   const sep = `| ${headers.map(() => "---").join(" | ")} |`;
   const body = rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
   return `${head}\n${sep}\n${body}`;
+}
+
+/**
+ * Escapes text being written into a raw HTML context.
+ *
+ * Several templates build real HTML rather than markdown, and the values going
+ * into it are not all the user's own: a repository imported by URL supplies its
+ * description and homepage, and those belong to whoever owns that repository.
+ * Unescaped, a description that closes its own tag writes arbitrary markup into
+ * someone else's README.
+ */
+function escHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Returns a URL only if it is a well formed http(s) address.
+ *
+ * Escaping alone is not enough for a link target: an escaped but hostile URL is
+ * still a hostile link. Anything else yields null so the caller can leave the
+ * link out rather than emit one pointing nowhere. Markdown link syntax uses
+ * this directly; HTML attributes go through safeUrlHtml.
+ */
+function httpUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
+/** httpUrl, escaped for an href or src attribute. */
+function safeUrl(url: string | undefined): string | null {
+  const ok = httpUrl(url);
+  return ok === null ? null : escHtml(ok);
 }
 
 function esc(text: string): string {
@@ -156,9 +201,12 @@ function buildBlocks(spec: ProjectSpec, chrome: Chrome): Block[] {
 
   // Links
   const links: string[] = [];
-  if (spec.demoUrl) links.push(`- **Live demo**: <${spec.demoUrl}>`);
-  if (spec.docsUrl) links.push(`- **Documentation**: <${spec.docsUrl}>`);
-  if (spec.repoUrl) links.push(`- **Repository**: <${spec.repoUrl}>`);
+  const demoLink = httpUrl(spec.demoUrl);
+  const docsLink = httpUrl(spec.docsUrl);
+  const repoLink = httpUrl(spec.repoUrl);
+  if (demoLink) links.push(`- **Live demo**: <${demoLink}>`);
+  if (docsLink) links.push(`- **Documentation**: <${docsLink}>`);
+  if (repoLink) links.push(`- **Repository**: <${repoLink}>`);
   add("demo", links.join("\n"));
 
   // About
@@ -275,7 +323,7 @@ function buildBlocks(spec: ProjectSpec, chrome: Chrome): Block[] {
   if (spec.faq.length) {
     const body = chrome.collapsible
       ? spec.faq
-          .map((f) => `<details>\n<summary><b>${f.q}</b></summary>\n\n${f.a}\n\n</details>`)
+          .map((f) => `<details>\n<summary><b>${escHtml(f.q)}</b></summary>\n\n${f.a}\n\n</details>`)
           .join("\n\n")
       : spec.faq.map((f) => `**${f.q}**\n\n${f.a}`).join("\n\n");
     add("faq", body);
@@ -359,11 +407,12 @@ function renderShowcase(spec: ProjectSpec): string {
 
   const out: string[] = ["<div align=\"center\">", ""];
 
-  if (spec.logo) {
-    out.push(`<img src="${spec.logo}" alt="${spec.name} logo" width="120" />`, "");
+  const logo = safeUrl(spec.logo);
+  if (logo) {
+    out.push(`<img src="${logo}" alt="${escHtml(spec.name)} logo" width="120" />`, "");
   }
-  out.push(`<h1>${spec.name}</h1>`, "");
-  out.push(`<p><i>${spec.tagline}</i></p>`, "");
+  out.push(`<h1>${escHtml(spec.name)}</h1>`, "");
+  out.push(`<p><i>${escHtml(spec.tagline)}</i></p>`, "");
 
   if (spec.sections.badges && spec.badges.length) {
     out.push(`<p>
@@ -372,8 +421,10 @@ function renderShowcase(spec: ProjectSpec): string {
   }
 
   const navLinks: string[] = [];
-  if (spec.demoUrl) navLinks.push(`<a href="${spec.demoUrl}"><b>Live Demo</b></a>`);
-  if (spec.docsUrl) navLinks.push(`<a href="${spec.docsUrl}"><b>Docs</b></a>`);
+  const demo = safeUrl(spec.demoUrl);
+  const docs = safeUrl(spec.docsUrl);
+  if (demo) navLinks.push(`<a href="${demo}"><b>Live Demo</b></a>`);
+  if (docs) navLinks.push(`<a href="${docs}"><b>Docs</b></a>`);
   if (repo) navLinks.push(`<a href="https://github.com/${repo}/issues"><b>Report Bug</b></a>`);
   if (repo) navLinks.push(`<a href="https://github.com/${repo}/issues"><b>Request Feature</b></a>`);
   if (navLinks.length) out.push(`<p>${navLinks.join(" · ")}</p>`, "");
@@ -619,9 +670,9 @@ function renderProfile(spec: ProjectSpec): string {
   );
 
   const out: string[] = [
-    `<h1 align="center">Hi 👋, I'm ${spec.author || spec.name}</h1>`,
+    `<h1 align="center">Hi 👋, I'm ${escHtml(spec.author || spec.name)}</h1>`,
     "",
-    `<h3 align="center">${spec.tagline}</h3>`,
+    `<h3 align="center">${escHtml(spec.tagline)}</h3>`,
     "",
   ];
 
@@ -657,12 +708,15 @@ function renderProfile(spec: ProjectSpec): string {
     "",
   );
 
-  if (spec.demoUrl || spec.docsUrl || spec.authorUrl) {
+  const site = httpUrl(spec.demoUrl);
+  const blog = httpUrl(spec.docsUrl);
+  const profile = httpUrl(spec.authorUrl);
+  if (site || blog || profile) {
     out.push("### 🌐 Find Me Online", "");
     const links: string[] = [];
-    if (spec.demoUrl) links.push(`[Website](${spec.demoUrl})`);
-    if (spec.docsUrl) links.push(`[Blog](${spec.docsUrl})`);
-    if (spec.authorUrl) links.push(`[Profile](${spec.authorUrl})`);
+    if (site) links.push(`[Website](${site})`);
+    if (blog) links.push(`[Blog](${blog})`);
+    if (profile) links.push(`[Profile](${profile})`);
     out.push(links.join(" · "), "");
   }
 
