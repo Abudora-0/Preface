@@ -37,6 +37,7 @@ import {
 import { Button, GithubIcon, Label, cx } from "@/components/ui";
 import { analyzeDump } from "@/lib/analyze";
 import { renderReadme } from "@/lib/render";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { templateMeta } from "@/lib/templates";
 import {
   emptySpec,
@@ -52,11 +53,36 @@ const LEGACY_STORAGE_KEY = "reposcribe.state.v1";
 
 const TABS = [
   { id: "dump", label: "Dump", icon: Sparkles, hint: "Paste project content" },
-  { id: "import", label: "Import", icon: GithubIcon, hint: "Pull from a GitHub repo" },
-  { id: "details", label: "Details", icon: SlidersHorizontal, hint: "Edit every field" },
-  { id: "sections", label: "Sections", icon: FileCode2, hint: "Toggle sections on and off" },
-  { id: "badges", label: "Badges", icon: BadgeCheck, hint: "Pick shields.io badges" },
-  { id: "templates", label: "Style", icon: LayoutTemplate, hint: "Switch template" },
+  {
+    id: "import",
+    label: "Import",
+    icon: GithubIcon,
+    hint: "Pull from a GitHub repo",
+  },
+  {
+    id: "details",
+    label: "Details",
+    icon: SlidersHorizontal,
+    hint: "Edit every field",
+  },
+  {
+    id: "sections",
+    label: "Sections",
+    icon: FileCode2,
+    hint: "Toggle sections on and off",
+  },
+  {
+    id: "badges",
+    label: "Badges",
+    icon: BadgeCheck,
+    hint: "Pick shields.io badges",
+  },
+  {
+    id: "templates",
+    label: "Style",
+    icon: LayoutTemplate,
+    hint: "Switch template",
+  },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -65,7 +91,13 @@ type ViewMode = "split" | "editor" | "preview";
 type AiStatus = {
   provider: "ollama" | "anthropic";
   ai: boolean;
-  ollama?: { up: boolean; url: string; model: string; hasModel: boolean; models: string[] };
+  ollama?: {
+    up: boolean;
+    url: string;
+    model: string;
+    hasModel: boolean;
+    models: string[];
+  };
 };
 
 /** Split bounds, as a percentage of the editor+preview area. */
@@ -132,7 +164,8 @@ export default function BuilderPage() {
     let restored: ProjectSpec | null = null;
     try {
       const raw =
-        localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+        localStorage.getItem(STORAGE_KEY) ??
+        localStorage.getItem(LEGACY_STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as {
           spec?: ProjectSpec;
@@ -213,12 +246,15 @@ export default function BuilderPage() {
   }, []);
 
   const aiLabel =
-    aiStatus?.provider === "anthropic" ? "Claude" : (aiStatus?.ollama?.model ?? "Ollama");
+    aiStatus?.provider === "anthropic"
+      ? "Claude"
+      : (aiStatus?.ollama?.model ?? "Ollama");
 
   /** Why generation is unavailable, phrased as something the user can act on. */
   const aiHint = useMemo(() => {
     if (aiAvailable !== false) return null;
-    if (!aiStatus) return "Could not reach the server to check AI availability.";
+    if (!aiStatus)
+      return "Could not reach the server to check AI availability.";
     if (aiStatus.provider === "anthropic") {
       return "Set ANTHROPIC_API_KEY in .env.local to enable Claude generation.";
     }
@@ -227,7 +263,9 @@ export default function BuilderPage() {
       return `Ollama is not running at ${o?.url ?? "the configured URL"}. Start it with "ollama serve".`;
     }
     if (!o.hasModel) {
-      const have = o.models.length ? ` You have: ${o.models.slice(0, 4).join(", ")}.` : "";
+      const have = o.models.length
+        ? ` You have: ${o.models.slice(0, 4).join(", ")}.`
+        : "";
       return `Ollama is running but has no model called "${o.model}". Pull it with "ollama pull ${o.model}", or set OLLAMA_MODEL to one you have.${have}`;
     }
     return "AI generation is unavailable.";
@@ -243,7 +281,10 @@ export default function BuilderPage() {
     if (!hydrated.current) return;
     const id = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ spec, markdown, manual, dump }));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ spec, markdown, manual, dump }),
+        );
       } catch {
         // quota exceeded, not fatal
       }
@@ -268,7 +309,11 @@ export default function BuilderPage() {
     try {
       const { spec: parsed, notes: n } = analyzeDump(dump);
       applySpec({ ...parsed, template: spec.template });
-      setNotes(n.length ? n : ["Parsed the dump, but found little structure to work with."]);
+      setNotes(
+        n.length
+          ? n
+          : ["Parsed the dump, but found little structure to work with."],
+      );
       notify("Parsed locally");
     } catch {
       setError("Could not parse that content.");
@@ -296,7 +341,9 @@ export default function BuilderPage() {
       }
       applySpec({ ...data.spec, template: spec.template });
       setNotes(data.notes ?? []);
-      notify(`Generated with ${data.provider === "anthropic" ? "Claude" : aiLabel}`);
+      notify(
+        `Generated with ${data.provider === "anthropic" ? "Claude" : aiLabel}`,
+      );
     } catch {
       setError("Network error while contacting the server.");
       notify("Network error", "error");
@@ -375,45 +422,54 @@ export default function BuilderPage() {
     };
   }, []);
 
-  const onSplitterDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // Suppress the native text selection / image drag that a press would start.
-    e.preventDefault();
-    draggingRef.current = true;
-    setDragging(true);
-    document.body.classList.add("resizing");
-  }, []);
+  const onSplitterDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Suppress the native text selection / image drag that a press would start.
+      e.preventDefault();
+      draggingRef.current = true;
+      setDragging(true);
+      document.body.classList.add("resizing");
+    },
+    [],
+  );
 
   /** Arrow keys nudge, Shift accelerates, Home/End jump, Enter recentres. */
-  const onSplitterKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const step = e.shiftKey ? 10 : 2;
-    const moves: Record<string, () => number> = {
-      ArrowLeft: () => splitPct - step,
-      ArrowRight: () => splitPct + step,
-      Home: () => SPLIT_MIN,
-      End: () => SPLIT_MAX,
-      Enter: () => 50,
-      " ": () => 50,
-    };
-    const next = moves[e.key];
-    if (!next) return;
-    e.preventDefault();
-    setSplitPct(clampSplit(next()));
-  }, [splitPct]);
+  const onSplitterKey = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const step = e.shiftKey ? 10 : 2;
+      const moves: Record<string, () => number> = {
+        ArrowLeft: () => splitPct - step,
+        ArrowRight: () => splitPct + step,
+        Home: () => SPLIT_MIN,
+        End: () => SPLIT_MAX,
+        Enter: () => 50,
+        " ": () => 50,
+      };
+      const next = moves[e.key];
+      if (!next) return;
+      e.preventDefault();
+      setSplitPct(clampSplit(next()));
+    },
+    [splitPct],
+  );
 
   // Belt and braces: never leave the page stuck in the resizing cursor state.
   useEffect(() => () => document.body.classList.remove("resizing"), []);
 
   /** Keep the gutter locked to the text, and scroll the preview proportionally. */
-  const onEditorScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
-    const el = e.currentTarget;
-    if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
+  const onEditorScroll = useCallback(
+    (e: React.UIEvent<HTMLTextAreaElement>) => {
+      const el = e.currentTarget;
+      if (gutterRef.current) gutterRef.current.scrollTop = el.scrollTop;
 
-    const p = previewScrollRef.current;
-    if (!p) return;
-    const eMax = el.scrollHeight - el.clientHeight;
-    const pMax = p.scrollHeight - p.clientHeight;
-    if (eMax > 4 && pMax > 0) p.scrollTop = (el.scrollTop / eMax) * pMax;
-  }, []);
+      const p = previewScrollRef.current;
+      if (!p) return;
+      const eMax = el.scrollHeight - el.clientHeight;
+      const pMax = p.scrollHeight - p.clientHeight;
+      if (eMax > 4 && pMax > 0) p.scrollTop = (el.scrollTop / eMax) * pMax;
+    },
+    [],
+  );
 
   const lineCount = useMemo(() => markdown.split("\n").length, [markdown]);
   const stats = useMemo(() => {
@@ -437,14 +493,20 @@ export default function BuilderPage() {
       <header className="flex h-13 shrink-0 items-center gap-3 border-b border-line bg-inset px-4 py-2.5">
         <button
           onClick={() => setPanelOpen((o) => !o)}
-          aria-label={panelOpen ? "Close the editing panel" : "Open the editing panel"}
+          aria-label={
+            panelOpen ? "Close the editing panel" : "Open the editing panel"
+          }
           aria-expanded={panelOpen}
           className="focus-ring btn-lift rounded-md border border-line bg-raised p-1.5 text-dim hover:border-faint hover:text-ink lg:hidden"
         >
           {panelOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
         </button>
 
-        <Link href="/" className="brand flex items-center gap-2 text-ink" title="Back to home">
+        <Link
+          href="/"
+          className="brand flex items-center gap-2 text-ink"
+          title="Back to home"
+        >
           <span className="brand-mark">
             <PrefaceMark size={28} />
           </span>
@@ -470,7 +532,9 @@ export default function BuilderPage() {
               title={`${v.label} (Ctrl+${v.key})`}
               className={cx(
                 "focus-ring btn-lift flex items-center gap-1.5 rounded-[4px] px-2.5 py-1 text-xs font-medium",
-                effectiveView === v.id ? "bg-raised text-ink shadow-sm" : "text-dim hover:text-ink",
+                effectiveView === v.id
+                  ? "bg-raised text-ink shadow-sm"
+                  : "text-dim hover:text-ink",
               )}
             >
               <v.icon size={13} />
@@ -501,16 +565,25 @@ export default function BuilderPage() {
           >
             <span
               className="block transition-transform duration-300"
-              style={{ transform: ghTheme === "dark" ? "rotate(0deg)" : "rotate(180deg)" }}
+              style={{
+                transform:
+                  ghTheme === "dark" ? "rotate(0deg)" : "rotate(180deg)",
+              }}
             >
               {ghTheme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </span>
           </button>
           <Button size="sm" onClick={copy} title="Copy markdown (Ctrl+Shift+C)">
             <span className={cx("grid place-items-center", copied && "pop-in")}>
-              {copied ? <Check size={13} className="text-lime" /> : <Copy size={13} />}
+              {copied ? (
+                <Check size={13} className="text-lime" />
+              ) : (
+                <Copy size={13} />
+              )}
             </span>
-            <span className="hidden sm:inline">{copied ? "Copied!" : "Copy"}</span>
+            <span className="hidden sm:inline">
+              {copied ? "Copied!" : "Copy"}
+            </span>
           </Button>
           <Button
             size="sm"
@@ -549,84 +622,98 @@ export default function BuilderPage() {
           )}
           inert={narrow && !panelOpen}
         >
-        {/* Tab rail */}
-        <nav className="flex w-[4.25rem] shrink-0 flex-col items-stretch gap-0.5 border-r border-line bg-inset px-1.5 py-2">
-          {TABS.map((t) => {
-            const on = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={cx(
-                  "rail-item focus-ring press relative flex flex-col items-center gap-1 rounded-md py-2.5 text-[10px] font-medium transition-all duration-150",
-                  on ? "bg-raised text-ink" : "text-faint hover:bg-panel hover:text-dim",
-                )}
-              >
-                <span
-                  aria-hidden
+          {/* Tab rail */}
+          <nav className="flex w-[4.25rem] shrink-0 flex-col items-stretch gap-0.5 border-r border-line bg-inset px-1.5 py-2">
+            {TABS.map((t) => {
+              const on = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
                   className={cx(
-                    "absolute top-1.5 bottom-1.5 -left-1.5 w-[3px] rounded-r-full bg-[#fd8c73] transition-transform duration-200",
-                    on ? "scale-y-100" : "scale-y-0",
+                    "rail-item focus-ring press relative flex flex-col items-center gap-1 rounded-md py-2.5 text-[10px] font-medium transition-all duration-150",
+                    on
+                      ? "bg-raised text-ink"
+                      : "text-faint hover:bg-panel hover:text-dim",
                   )}
-                />
-                <t.icon size={16} />
-                {t.label}
-                <span className="rail-tip">{t.hint}</span>
-              </button>
-            );
-          })}
-        </nav>
+                >
+                  <span
+                    aria-hidden
+                    className={cx(
+                      "absolute top-1.5 bottom-1.5 -left-1.5 w-[3px] rounded-r-full bg-[#fd8c73] transition-transform duration-200",
+                      on ? "scale-y-100" : "scale-y-0",
+                    )}
+                  />
+                  <t.icon size={16} />
+                  {t.label}
+                  <span className="rail-tip">{t.hint}</span>
+                </button>
+              );
+            })}
+          </nav>
 
-        {/* Control panel */}
-        <aside className="w-[23rem] max-w-[calc(100vw-4.25rem)] shrink-0 overflow-y-auto border-r border-line bg-bg">
-          <div className="sticky top-0 z-10 border-b border-line bg-panel">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <span className="text-xs font-semibold text-ink">
-                {TABS.find((t) => t.id === tab)?.label}
-              </span>
-              {busy ? (
-                <span className="ml-auto flex items-center gap-1.5 text-[11px] text-dim">
-                  <Loader2 size={12} className="spin" />
-                  working
+          {/* Control panel */}
+          <aside className="w-[23rem] max-w-[calc(100vw-4.25rem)] shrink-0 overflow-y-auto border-r border-line bg-bg">
+            <div className="sticky top-0 z-10 border-b border-line bg-panel">
+              <div className="flex items-center gap-2 px-3 py-2">
+                <span className="text-xs font-semibold text-ink">
+                  {TABS.find((t) => t.id === tab)?.label}
                 </span>
+                {busy ? (
+                  <span className="ml-auto flex items-center gap-1.5 text-[11px] text-dim">
+                    <Loader2 size={12} className="spin" />
+                    working
+                  </span>
+                ) : null}
+              </div>
+              {busy ? (
+                <div className="shimmer-bar h-0.5 w-full bg-panel" />
               ) : null}
             </div>
-            {busy ? <div className="shimmer-bar h-0.5 w-full bg-panel" /> : null}
-          </div>
 
-          <div key={tab} className="slide-in p-3">
-            {tab === "dump" ? (
-              <DumpPanel
-                dump={dump}
-                onDumpChange={setDump}
-                onAnalyze={runAnalyze}
-                onGenerate={runGenerate}
-                aiAvailable={aiAvailable}
-                aiLabel={aiLabel}
-                aiHint={aiHint}
-                busy={busy}
-                notes={notes}
-                error={error}
-              />
-            ) : null}
-            {tab === "import" ? (
-              <ImportPanel
-                onDump={setDump}
-                onImported={(s, n) => {
-                  applySpec({ ...s, template: spec.template });
-                  setNotes(n);
-                  notify("Repository imported");
-                }}
-              />
-            ) : null}
-            {tab === "details" ? <DetailsPanel spec={spec} onSpec={applySpec} /> : null}
-            {tab === "sections" ? <SectionsPanel spec={spec} onSpec={applySpec} /> : null}
-            {tab === "badges" ? <BadgesPanel spec={spec} onSpec={applySpec} /> : null}
-            {tab === "templates" ? <TemplatesPanel spec={spec} onSpec={applySpec} /> : null}
-          </div>
-        </aside>
+            <ErrorBoundary label={`The ${tab} panel`} resetKey={tab}>
+              <div key={tab} className="slide-in p-3">
+                {tab === "dump" ? (
+                  <DumpPanel
+                    dump={dump}
+                    onDumpChange={setDump}
+                    onAnalyze={runAnalyze}
+                    onGenerate={runGenerate}
+                    aiAvailable={aiAvailable}
+                    aiLabel={aiLabel}
+                    aiHint={aiHint}
+                    busy={busy}
+                    notes={notes}
+                    error={error}
+                  />
+                ) : null}
+                {tab === "import" ? (
+                  <ImportPanel
+                    onDump={setDump}
+                    onImported={(s, n) => {
+                      applySpec({ ...s, template: spec.template });
+                      setNotes(n);
+                      notify("Repository imported");
+                    }}
+                  />
+                ) : null}
+                {tab === "details" ? (
+                  <DetailsPanel spec={spec} onSpec={applySpec} />
+                ) : null}
+                {tab === "sections" ? (
+                  <SectionsPanel spec={spec} onSpec={applySpec} />
+                ) : null}
+                {tab === "badges" ? (
+                  <BadgesPanel spec={spec} onSpec={applySpec} />
+                ) : null}
+                {tab === "templates" ? (
+                  <TemplatesPanel spec={spec} onSpec={applySpec} />
+                ) : null}
+              </div>
+            </ErrorBoundary>
+          </aside>
 
-        {/* Editor and preview */}
+          {/* Editor and preview */}
         </div>
 
         <div ref={mainRef} className="flex min-w-0 flex-1">
@@ -647,7 +734,11 @@ export default function BuilderPage() {
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     onClick={() => setWrap((w) => !w)}
-                    title={wrap ? "Disable word wrap" : "Enable word wrap (hides line numbers)"}
+                    title={
+                      wrap
+                        ? "Disable word wrap"
+                        : "Enable word wrap (hides line numbers)"
+                    }
                     className={cx(
                       "focus-ring press flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors",
                       wrap ? "bg-raised text-ink" : "text-faint hover:text-dim",
@@ -742,7 +833,14 @@ export default function BuilderPage() {
                 </span>
               </div>
               <div key={spec.template} className="fade-in min-h-0 flex-1">
-                <Preview markdown={markdown} theme={ghTheme} scrollRef={previewScrollRef} />
+                {/* Markdown is user supplied, so the renderer is a real risk. */}
+                <ErrorBoundary label="The preview" resetKey={spec.template}>
+                  <Preview
+                    markdown={markdown}
+                    theme={ghTheme}
+                    scrollRef={previewScrollRef}
+                  />
+                </ErrorBoundary>
               </div>
             </section>
           ) : null}

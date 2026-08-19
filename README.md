@@ -177,13 +177,14 @@ src/
 │   │   ├── generate/    Model pass, Ollama or Claude
 │   │   ├── github/      Repo import
 │   │   └── status/      Which integrations are usable right now
-│   ├── builder/         The split-screen workspace
+│   ├── builder/         The split-screen workspace, with its error.tsx
 │   ├── apple-icon.tsx   180x180 touch icon, generated with next/og
 │   ├── icon.svg         Favicon (the pilcrow mark)
 │   ├── globals.css      Design tokens, motion, GitHub markdown styles
 │   └── page.tsx         Landing page
 ├── components/
 │   ├── ContribGraph.tsx Animated contribution heatmap
+│   ├── ErrorBoundary.tsx Contains a render failure to one region
 │   ├── PrefaceMark.tsx  Brand mark (geometric pilcrow)
 │   ├── Preview.tsx      Sanitised GitHub-accurate markdown renderer
 │   ├── Reveal.tsx       Scroll reveal wrapper
@@ -218,6 +219,12 @@ silently beats Tailwind's `font-mono` utility.
 **The line-number gutter draws one row per logical line**, so it is only correct
 while soft wrap is off. Toggling wrap on hides the gutter rather than showing
 numbers that drift.
+
+**A failing panel does not take the workspace down.** Each region of the
+builder sits behind its own boundary, so a panel that cannot render is replaced
+on its own while the editor, preview and draft stay on screen. The route level
+`error.tsx` is the backstop, and it offers to save or clear the stored draft,
+because a draft that crashes on restore makes a plain retry a loop.
 
 **Local models get a smaller dump.** The budget scales with parameter count, 8k
 characters at 1.5B up to 40k above 9B, against 180k for Claude. Ollama silently
